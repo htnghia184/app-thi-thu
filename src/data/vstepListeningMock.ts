@@ -3,8 +3,8 @@ import { VstepExamSet } from './vstepReadingMock';
 export const listeningExamSets: VstepExamSet[] = [
   {
     id: 'listening-001',
-    examTitle: 'VSTEP Listening Practice Test 1',
-    description: 'Full VSTEP Listening section with 3 audio passages. Each audio can be played only once.',
+    examTitle: 'English Listening Practice Test 1',
+    description: 'Full English Listening section with 3 audio passages. Each audio can be played only once.',
     skillType: 'listening',
     totalDurationMinutes: 25,
     totalQuestions: 15,

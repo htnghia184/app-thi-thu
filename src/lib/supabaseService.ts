@@ -296,6 +296,7 @@ export interface ExamResultPayload {
   score_raw: number;
   score_vstep: number;
   time_spent_seconds: number;
+  total_questions: number;
   user_answers: Record<string, number | null>;
 }
 
@@ -1505,7 +1506,7 @@ export async function aiGradeWriting(
     // const response = await openai.chat.completions.create({
     //   model: 'gpt-4',
     //   messages: [
-    //     { role: 'system', content: 'You are an IELTS/VSTEP writing examiner...' },
+    //     { role: 'system', content: 'You are an IELTS/English writing examiner...' },
     //     { role: 'user', content: `Task: ${taskPrompt}\n\nStudent Response: ${studentResponse}` }
     //   ]
     // });

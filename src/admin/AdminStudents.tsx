@@ -104,14 +104,14 @@ export const AdminStudents: React.FC<AdminStudentsExtendedProps> = ({ onBack: _o
                     <div className={`px-4 py-2 rounded-lg font-bold text-lg ${getVstepColor(r.score_vstep)}`}>
                       {r.score_vstep}
                     </div>
-                    <div className="text-sm text-gray-500 mt-1">{r.score_raw}/40 correct</div>
+                    <div className="text-sm text-gray-500 mt-1">{r.score_raw}/{r.total_questions ?? 40} correct</div>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 text-sm text-gray-500 border-t pt-3">
                   <span className="flex items-center gap-1"><Clock size={14} /> {Math.floor(r.time_spent_seconds / 60)}m {r.time_spent_seconds % 60}s</span>
                 </div>
                 <div className="mt-3 w-full bg-gray-200 rounded-full h-2">
-                  <div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${(r.score_raw / 40) * 100}%` }} />
+                  <div className="bg-indigo-600 h-2 rounded-full" style={{ width: `${(r.score_raw / (r.total_questions ?? 40)) * 100}%` }} />
                 </div>
               </div>
             ))}
@@ -143,7 +143,7 @@ export const AdminStudents: React.FC<AdminStudentsExtendedProps> = ({ onBack: _o
         <div className="bg-white rounded-xl shadow-lg p-6">
           <div className="flex items-center gap-3 text-emerald-600 mb-2">
             <BarChart3 size={24} />
-            <span className="text-sm font-medium text-gray-600">Class Avg VSTEP</span>
+            <span className="text-sm font-medium text-gray-600">Class Avg Score</span>
           </div>
           <div className="text-3xl font-bold text-emerald-700">{overallAvg}</div>
         </div>

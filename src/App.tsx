@@ -24,6 +24,7 @@ import { ExamHistory } from './components/ExamHistory';
 import { AdminLayout } from './admin/AdminLayout';
 import { ExamList } from './admin/ExamList';
 import { ExamForm } from './admin/ExamForm';
+import { ExamPreview } from './admin/ExamPreview';
 import { AuthModal } from './components/Auth/AuthModal';
 import { AdminStudents } from './admin/AdminStudents';
 import { AdminClasses } from './admin/AdminClasses';
@@ -47,6 +48,7 @@ function App() {
   const [examsLoading, setExamsLoading] = useState(true);
   const [selectedExam, setSelectedExam] = useState<VstepExamSet | null>(null);
   const [editingExam, setEditingExam] = useState<VstepExamSet | null>(null);
+  const [previewingExam, setPreviewingExam] = useState<VstepExamSet | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
   const [adminTab, setAdminTab] = useState<'exams' | 'students' | 'classes' | 'grading' | 'speaking_grading'>('exams');
   const [isTeacherView, setIsTeacherView] = useState(false);
@@ -240,7 +242,7 @@ function App() {
       <div className="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
         <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-12 max-w-md w-full text-center">
           <Shield size={48} className="mx-auto text-indigo-600 mb-4" />
-          <h1 className="text-3xl font-bold text-indigo-900 dark:text-gray-100 mb-2">VSTEP Practice</h1>
+          <h1 className="text-3xl font-bold text-indigo-900 dark:text-gray-100 mb-2">E-Master Online Exam Center</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">Sign in to start practicing</p>
           <button
             onClick={() => setAuthModalOpen(true)}
@@ -320,7 +322,10 @@ function App() {
           editingExam ? (
             <ExamForm initialExam={editingExam} onSave={handleAdminSave} onCancel={() => setEditingExam(null)} />
           ) : (
-            <ExamList exams={exams} onEdit={setEditingExam} onPreview={() => {}} onDelete={handleAdminDelete} onRefresh={loadExams} />
+            <>
+              <ExamList exams={exams} onEdit={setEditingExam} onPreview={setPreviewingExam} onDelete={handleAdminDelete} onRefresh={loadExams} />
+              {previewingExam && <ExamPreview exam={previewingExam} onClose={() => setPreviewingExam(null)} />}
+            </>
           )
         ) : adminTab === 'classes' && !isTeacherView ? (
           <AdminClasses userId={user?.id || ''} />

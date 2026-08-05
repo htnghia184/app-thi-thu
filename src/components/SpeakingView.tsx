@@ -1,6 +1,7 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { Passage } from '../data/vstepReadingMock';
 import { uploadSpeakingAudio, submitSpeakingSubmission } from '../lib/supabaseService';
+import { passageToHtml } from '../utils/passageHtml';
 import {
   Mic, Square, Loader2, CheckCircle, AlertCircle,
   Headphones, Trash2, Save, BookOpen
@@ -377,8 +378,8 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
               </div>
               <div className="p-4 md:p-6">
                 <div
-                  className="text-gray-800 dark:text-gray-200 text-sm md:text-base leading-relaxed whitespace-pre-line"
-                  dangerouslySetInnerHTML={{ __html: currentPassage.passageText }}
+                  className="text-gray-800 dark:text-gray-200 text-sm md:text-base leading-relaxed whitespace-pre-line passage-content"
+                  dangerouslySetInnerHTML={{ __html: passageToHtml(currentPassage.passageText) }}
                 />
               </div>
             </div>

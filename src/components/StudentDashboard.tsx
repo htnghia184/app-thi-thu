@@ -283,7 +283,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         <div className="max-w-7xl mx-auto px-4 md:px-8 py-3 md:py-4 flex items-center justify-between">
           <div className="flex items-center gap-2 md:gap-3">
             <Trophy size={22} className="md:size-[28px] text-yellow-400" />
-            <h1 className="text-lg md:text-2xl font-bold">VSTEP Practice</h1>
+            <h1 className="text-lg md:text-2xl font-bold">E-Master</h1>
           </div>
           <div className="flex items-center gap-2 md:gap-4">
             <div className="hidden md:flex items-center gap-2 text-indigo-200 text-sm">
@@ -435,7 +435,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               {loadingResults ? '...' : bestScore !== null ? bestScore.toFixed(1) : '-'}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
-              <BarChart3 size={14} /> Best VSTEP Score
+              <BarChart3 size={14} /> Best Score
             </div>
           </div>
         </div>
@@ -582,7 +582,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                     </span>
                   </div>
                   <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-                    <span>{r.score_raw}/{r.exams?.title ? 40 : '-'} correct</span>
+                    <span>{r.score_raw}/{r.total_questions ?? '-'} correct</span>
                     <span>{formatTime(r.time_spent_seconds)}</span>
                   </div>
                 </div>

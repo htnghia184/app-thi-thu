@@ -136,8 +136,8 @@ export const ExamHistory: React.FC<ExamHistoryProps> = ({ userId, onBack }) => {
                 <tr className="bg-indigo-50 border-b border-indigo-100">
                   <th className="text-left py-4 px-6 text-indigo-900 font-semibold">Date</th>
                   <th className="text-left py-4 px-6 text-indigo-900 font-semibold">Exam</th>
+                  <th className="text-center py-4 px-6 text-indigo-900 font-semibold">Correct</th>
                   <th className="text-center py-4 px-6 text-indigo-900 font-semibold">Score</th>
-                  <th className="text-center py-4 px-6 text-indigo-900 font-semibold">VSTEP</th>
                   <th className="text-center py-4 px-6 text-indigo-900 font-semibold">Time</th>
                   <th className="text-right py-4 px-6 text-indigo-900 font-semibold">Action</th>
                 </tr>
@@ -155,7 +155,7 @@ export const ExamHistory: React.FC<ExamHistoryProps> = ({ userId, onBack }) => {
                       {r.exams?.title || 'Practice Test'}
                     </td>
                     <td className="py-4 px-6 text-center">
-                      <span className="font-bold text-lg">{r.score_raw}/40</span>
+                      <span className="font-bold text-lg">{r.score_raw}/{r.total_questions ?? 40}</span>
                     </td>
                     <td className="py-4 px-6 text-center">
                       <span className={`font-bold text-lg ${getVstepColor(r.score_vstep)}`}>

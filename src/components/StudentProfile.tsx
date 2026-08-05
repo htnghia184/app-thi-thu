@@ -25,7 +25,7 @@ const TARGET_SCORES = [
   { value: 'C1', label: 'C1', description: 'Advanced' },
 ];
 
-// Rough mapping of target score to VSTEP score
+// Rough mapping of target level to exam score
 const TARGET_VSTEP: Record<string, number> = {
   A2: 3.5,
   B1: 4.0,
@@ -240,7 +240,7 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({ user, onBack, on
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 text-center">
             <div className="text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">{avgScore ? avgScore.toFixed(1) : '-'}</div>
             <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
-              <BarChart3 size={14} /> Avg VSTEP Score
+              <BarChart3 size={14} /> Avg Score
             </div>
           </div>
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 text-center">
@@ -264,7 +264,7 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({ user, onBack, on
           </h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Set your VSTEP target</label>
+              <label className="block text-sm font-medium text-gray-600 dark:text-gray-400 mb-2">Set your score target</label>
               <select
                 value={editTargetScore}
                 onChange={e => setEditTargetScore(e.target.value)}
@@ -346,7 +346,7 @@ export const StudentProfile: React.FC<StudentProfileProps> = ({ user, onBack, on
                         {new Date(r.submitted_at).toLocaleDateString('vi-VN', { month: 'short', day: 'numeric' })}
                       </td>
                       <td className="py-3 px-2 text-center font-bold text-indigo-600 dark:text-indigo-400">{r.score_vstep?.toFixed(1)}</td>
-                      <td className="py-3 px-2 text-center text-gray-600 dark:text-gray-400">{r.score_raw}/40</td>
+                      <td className="py-3 px-2 text-center text-gray-600 dark:text-gray-400">{r.score_raw}/{r.total_questions ?? 40}</td>
                       <td className="py-3 px-2 text-center text-gray-500 dark:text-gray-400">{formatTime(r.time_spent_seconds)}</td>
                       <td className="py-3 px-2 text-right">
                         <button

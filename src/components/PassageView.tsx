@@ -1,17 +1,7 @@
-import React, { useRef, useCallback, useState } from 'react';
-import { Highlight, HighlightColor, renderHighlightedText, HIGHLIGHT_COLOR_OPTIONS } from '../hooks/useHighlighter';
+import React, { useRef, useCallback, useState, useEffect, useMemo } from 'react';
+import { Highlight, HighlightColor, applyHighlightsToDom, HIGHLIGHT_COLOR_OPTIONS } from '../hooks/useHighlighter';
 import { Highlighter, Palette, Trash2, Timer } from 'lucide-react';
-
-// Strip HTML tags but keep newlines
-function stripHtml(html: string): string {
-  return html
-    .replace(/<\/p>/gi, '\n\n')
-    .replace(/<br\s*\/?>/gi, '\n')
-    .replace(/<[^>]*>/g, '')
-    .replace(/&nbsp;/g, ' ')
-    .replace(/\n{3,}/g, '\n\n')
-    .trim();
-}
+import { passageToHtml } from '../utils/passageHtml';
 
 interface PassageViewProps {
   title: string;
@@ -47,32 +37,40 @@ export const PassageView: React.FC<PassageViewProps> = ({
   timerSlot,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const hideTimerRef = useRef<number | undefined>(undefined);
   const [showColorPicker, setShowColorPicker] = useState(false);
   const [floatPos, setFloatPos] = useState({ x: 0, y: 0, above: true });
 
-  const plainText = stripHtml(passageText);
-  const passageHighlights = highlights.filter(h => h.passageId === passageId);
+  const passageHighlights = useMemo(
+    () => highlights.filter(h => h.passageId === passageId),
+    [highlights, passageId]
+  );
 
-  // Handle text selection in highlight mode
-  const handleMouseUp = useCallback(() => {
+  // Render passage HTML + re-apply highlight spans whenever content or highlights change
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!container) return;
+    container.innerHTML = passageToHtml(passageText);
+    applyHighlightsToDom(container, passageHighlights);
+  }, [passageText, passageHighlights]);
+
+  // Process the current text selection: show the color picker near the selection
+  const processSelection = useCallback(() => {
     if (!isHighlightMode) return;
 
     const selection = window.getSelection();
     if (!selection || selection.isCollapsed || !selection.toString().trim()) {
-      setShowColorPicker(false);
+      // Collapsed selection: hide the picker, but give the picker buttons time to receive clicks
+      hideTimerRef.current = window.setTimeout(() => setShowColorPicker(false), 250);
       return;
     }
 
     const text = selection.toString().trim();
     if (text.length === 0) return;
 
-    // Get the range relative to our container
     const range = selection.getRangeAt(0);
     const container = containerRef.current;
-    if (!container || !container.contains(range.commonAncestorContainer)) {
-      setShowColorPicker(false);
-      return;
-    }
+    if (!container || !container.contains(range.commonAncestorContainer)) return;
 
     // Calculate offsets relative to the text content
     const preCaretRange = range.cloneRange();
@@ -81,16 +79,18 @@ export const PassageView: React.FC<PassageViewProps> = ({
     const startOffset = preCaretRange.toString().length;
     const endOffset = startOffset + text.length;
 
-    // Show the color picker near the selection
+    // Position the picker near the selection (kept inside the container on small screens)
     const rect = range.getBoundingClientRect();
     const containerRect = container.getBoundingClientRect();
     const relativeTop = rect.top - containerRect.top;
     const popupHeight = 60;
-
-    // If selection is near the top, show picker below; otherwise show above
     const above = relativeTop > popupHeight;
+
+    const centerX = rect.left - containerRect.left + rect.width / 2;
+    const maxX = Math.max(140, containerRect.width - 70);
+
     setFloatPos({
-      x: rect.left - containerRect.left + rect.width / 2,
+      x: Math.max(70, Math.min(centerX, maxX)),
       y: above ? relativeTop - 10 : rect.bottom - containerRect.top + 10,
       above,
     });
@@ -98,10 +98,19 @@ export const PassageView: React.FC<PassageViewProps> = ({
 
     // Store the offsets for when user picks a color
     (window as any).__highlightData = { passageId, startOffset, endOffset, text };
-    // Do NOT clear selection — keep it visible while picker is shown
   }, [isHighlightMode, passageId]);
 
+  // Works for both mouse and touch: selectionchange covers the whole interaction
+  useEffect(() => {
+    document.addEventListener('selectionchange', processSelection);
+    return () => {
+      document.removeEventListener('selectionchange', processSelection);
+      window.clearTimeout(hideTimerRef.current);
+    };
+  }, [processSelection]);
+
   const applyHighlight = useCallback((color: HighlightColor) => {
+    window.clearTimeout(hideTimerRef.current);
     const data = (window as any).__highlightData;
     if (data) {
       onSetActiveColor(color);
@@ -141,7 +150,10 @@ export const PassageView: React.FC<PassageViewProps> = ({
           {isHighlightMode && (
             <>
               <button
-                onClick={() => setShowColorPicker(!showColorPicker)}
+                onClick={() => {
+                  window.clearTimeout(hideTimerRef.current);
+                  setShowColorPicker(!showColorPicker);
+                }}
                 className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-all"
                 title="Change Highlight Color"
               >
@@ -176,9 +188,9 @@ export const PassageView: React.FC<PassageViewProps> = ({
       {/* Color picker popover */}
       {showColorPicker && (
         <div
-          className="absolute z-50 bg-white dark:bg-gray-700 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-600 p-2 flex gap-1"
+          className="absolute z-50 bg-white dark:bg-gray-700 rounded-xl shadow-2xl border border-gray-200 dark:border-gray-600 p-2 flex gap-1.5"
           style={{
-            left: Math.min(floatPos.x, 300),
+            left: floatPos.x,
             top: floatPos.y,
             transform: floatPos.above ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
           }}
@@ -187,7 +199,7 @@ export const PassageView: React.FC<PassageViewProps> = ({
             <button
               key={opt.color}
               onClick={() => applyHighlight(opt.color)}
-              className={`w-8 h-8 rounded-lg ${opt.class} border-2 transition-all ${
+              className={`w-9 h-9 md:w-8 md:h-8 rounded-lg ${opt.class} border-2 transition-all ${
                 activeColor === opt.color ? 'border-indigo-600 scale-110' : 'border-transparent hover:scale-105'
               }`}
               title={opt.label}
@@ -199,17 +211,16 @@ export const PassageView: React.FC<PassageViewProps> = ({
       {/* Passage text with highlights */}
       <div
         ref={containerRef}
-        className={`text-sm md:text-base text-gray-800 dark:text-gray-200 leading-relaxed whitespace-pre-wrap ${isHighlightMode ? 'cursor-text' : ''}`}
-        onMouseUp={handleMouseUp}
+        className={`passage-content text-sm md:text-base text-gray-800 dark:text-gray-200 leading-relaxed ${isHighlightMode ? 'cursor-text select-text' : 'select-text'}`}
+        onMouseUp={processSelection}
+        onTouchEnd={processSelection}
         onClick={handleContainerClick}
-      >
-        {renderHighlightedText(plainText, passageHighlights)}
-      </div>
+      />
 
       {isHighlightMode && (
         <div className="mt-4 p-3 bg-indigo-50 dark:bg-indigo-900/30 rounded-lg text-xs text-indigo-700 dark:text-indigo-300 flex items-center gap-2">
           <Highlighter size={14} />
-          Highlight mode is ON. Select any text to highlight it. Click a highlight to remove it.
+          Highlight mode is ON. Select any text to highlight it. Tap a highlight to remove it.
         </div>
       )}
     </div>

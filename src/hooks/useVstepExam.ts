@@ -126,6 +126,7 @@ export function useVstepExamState(exam: VstepExamSet, userId?: string) {
           score_raw: correctCount,
           score_vstep: vstepScore,
           time_spent_seconds: timeSpent,
+          total_questions: allQuestions.length,
           user_answers: userAnswers as Record<string, number | null>,
         };
 

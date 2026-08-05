@@ -11,9 +11,9 @@ export default defineConfig({
       registerType: 'autoUpdate',
       includeAssets: ['pwa-icon.svg'],
       manifest: {
-        name: 'VSTEP Practice',
-        short_name: 'VSTEP',
-        description: 'Practice VSTEP Reading, Listening, and Writing exams online',
+        name: 'E-Master Online Exam Center',
+        short_name: 'E-Master',
+        description: 'Practice English Reading, Listening, and Writing exams online',
         theme_color: '#4f46e5',
         background_color: '#eef2ff',
         display: 'standalone',

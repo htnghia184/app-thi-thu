@@ -1,5 +1,5 @@
 -- ==========================================================
--- VSTEP Exam App - Full Schema
+-- E-Master Online Exam Center - Full Schema
 -- ==========================================================
 
 -- 1. Custom types

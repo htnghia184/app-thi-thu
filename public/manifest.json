@@ -1,7 +1,7 @@
 {
-  "name": "VSTEP Practice",
-  "short_name": "VSTEP",
-  "description": "Practice VSTEP Reading, Listening, and Writing exams online",
+  "name": "E-Master Online Exam Center",
+  "short_name": "E-Master",
+  "description": "Practice English Reading, Listening, and Writing exams online",
   "start_url": "/",
   "display": "standalone",
   "orientation": "portrait",

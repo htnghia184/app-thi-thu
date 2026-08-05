@@ -1,9 +1,9 @@
--- Seed: Sample VSTEP Exam
+-- Seed: Sample English Exam
 INSERT INTO exams (id, title, description, duration_minutes, is_published)
 VALUES (
   '00000000-0000-0000-0000-000000000001',
-  'VSTEP Reading Practice Test',
-  'A comprehensive practice test for VSTEP Reading section with 4 passages and 40 questions.',
+  'English Reading Practice Test',
+  'A comprehensive practice test for the Reading section with 4 passages and 40 questions.',
   60,
   TRUE
 );

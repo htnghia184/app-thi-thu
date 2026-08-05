@@ -74,6 +74,44 @@ body {
 :root.dark .dark\:fill-amber-500 { fill: #f59e0b !important; }
 :root.dark .dark\:fill-amber-200 { fill: #fde68a !important; }
 
+/* --- Hide scrollbars (tab bars, horizontal scrollers) --- */
+.no-scrollbar::-webkit-scrollbar { display: none; }
+.no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+
+/* --- Rich text content (passage rendering + editor) --- */
+.passage-content p,
+.rte-content p { margin: 0 0 0.9em; }
+.passage-content p:last-child,
+.rte-content p:last-child { margin-bottom: 0; }
+.passage-content h2,
+.rte-content h2 { font-size: 1.25rem; font-weight: 700; margin: 1em 0 0.5em; color: inherit; }
+.passage-content h3,
+.rte-content h3 { font-size: 1.1rem; font-weight: 700; margin: 1em 0 0.5em; color: inherit; }
+.passage-content ul,
+.rte-content ul,
+.passage-content ol,
+.rte-content ol { margin: 0 0 0.9em; padding-left: 1.5em; list-style-position: outside; }
+.passage-content ul, .rte-content ul { list-style: disc; }
+.passage-content ol, .rte-content ol { list-style: decimal; }
+.passage-content blockquote,
+.rte-content blockquote {
+  margin: 0 0 0.9em;
+  padding: 0.5em 1em;
+  border-left: 3px solid #6366f1;
+  background: rgba(99, 102, 241, 0.08);
+  border-radius: 0 0.5rem 0.5rem 0;
+  color: inherit;
+}
+.passage-content [data-cols],
+.rte-content [data-cols] { column-gap: 2rem; }
+
+/* Rich text editor placeholder */
+.rte-editor:empty::before {
+  content: attr(data-placeholder);
+  color: #9ca3af;
+  pointer-events: none;
+}
+
 /* --- Opacity --- */
 :root.dark .dark\:opacity-70 { opacity: 0.7 !important; }
 

@@ -1,5 +1,5 @@
 -- ==========================================================
--- VSTEP Exam App - Migration 003: Speaking Submissions & Grading
+-- E-Master Online Exam Center - Migration 003: Speaking Submissions & Grading
 -- ==========================================================
 
 -- 1. Speaking submissions table

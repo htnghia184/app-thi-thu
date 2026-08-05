@@ -2,6 +2,7 @@ import React, { useState, useRef } from 'react';
 import { Upload, Trash2, Music, CheckCircle, AlertCircle } from 'lucide-react';
 import { VstepExamSet, Passage, Question } from '../data/vstepReadingMock';
 import { uploadAudio, deleteAudio, getAudioUrl } from '../lib/supabaseService';
+import { RichTextEditor } from '../components/RichTextEditor';
 
 interface ExamFormProps {
   initialExam: VstepExamSet;
@@ -13,10 +14,16 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
   const [step, setStep] = useState(1);
   const [exam, setExam] = useState<VstepExamSet>(initialExam);
   const [currentPassageIndex, setCurrentPassageIndex] = useState(0);
+  const [defaultQuestionCount, setDefaultQuestionCount] = useState(10);
   const [saving, setSaving] = useState(false);
   const [uploadingAudio, setUploadingAudio] = useState(false);
   const [audioUploadError, setAudioUploadError] = useState('');
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const getNextQuestionId = () => {
+    const ids = exam.passages.flatMap(p => p.questions.map(q => q.id));
+    return (ids.length > 0 ? Math.max(...ids) : 0) + 1;
+  };
 
   const handleAudioUpload = async (file: File) => {
     if (!file) return;
@@ -60,13 +67,13 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
 
   const addPassage = () => {
     const newId = Math.max(...exam.passages.map(p => p.id), 0) + 1;
-    const baseOffset = exam.passages.length * 10;
+    const firstQuestionId = getNextQuestionId();
     const newPassage: Passage = {
       id: newId,
       title: `New Passage ${exam.passages.length + 1}`,
       passageText: '',
-      questions: Array.from({ length: 10 }, (_, i) => ({
-        id: baseOffset + i + 1,
+      questions: Array.from({ length: defaultQuestionCount }, (_, i) => ({
+        id: firstQuestionId + i,
         questionText: '',
         options: ['', '', '', ''],
         correctAnswer: 0,
@@ -77,7 +84,7 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
     setExam(prev => ({
       ...prev,
       passages: [...prev.passages, newPassage],
-      totalQuestions: (prev.passages.length + 1) * 10
+      totalQuestions: prev.passages.reduce((sum, p) => sum + p.questions.length, 0) + defaultQuestionCount
     }));
   };
 
@@ -87,11 +94,41 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
     setExam(prev => ({
       ...prev,
       passages: newPassages,
-      totalQuestions: newPassages.length * 10
+      totalQuestions: newPassages.reduce((sum, p) => sum + p.questions.length, 0)
     }));
     if (currentPassageIndex >= newPassages.length) {
       setCurrentPassageIndex(Math.max(0, newPassages.length - 1));
     }
+  };
+
+  const updateQuestionCount = (passageIndex: number, count: number) => {
+    const safeCount = Math.max(0, Math.min(count, 50));
+    const newPassages = [...exam.passages];
+    const passage = newPassages[passageIndex];
+    const current = passage.questions;
+
+    let questions: Question[];
+    if (safeCount > current.length) {
+      const firstQuestionId = getNextQuestionId();
+      const additions = Array.from({ length: safeCount - current.length }, (_, i) => ({
+        id: firstQuestionId + i,
+        questionText: '',
+        options: ['', '', '', ''],
+        correctAnswer: 0,
+        explanation: '',
+        questionType: 'detail' as const
+      }));
+      questions = [...current, ...additions];
+    } else {
+      questions = current.slice(0, safeCount);
+    }
+
+    newPassages[passageIndex] = { ...passage, questions };
+    setExam(prev => ({
+      ...prev,
+      passages: newPassages,
+      totalQuestions: newPassages.reduce((sum, p) => sum + p.questions.length, 0)
+    }));
   };
 
   const updatePassage = (index: number, field: keyof Passage, value: any) => {
@@ -174,7 +211,7 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
               value={exam.examTitle}
               onChange={(e) => updateMetadata('examTitle', e.target.value)}
               className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200"
-              placeholder="VSTEP Reading Practice Test"
+              placeholder="English Reading Practice Test"
             />
           </div>
           <div>
@@ -224,16 +261,29 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
       {/* Step 2: Passages */}
       {step === 2 && (
         <div>
-          <div className="flex items-center justify-between mb-4 md:mb-6">
+          <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-4 md:mb-6">
             <h3 className="text-lg md:text-xl font-semibold text-indigo-900 dark:text-gray-100">Passages ({exam.passages.length}/4)</h3>
-            {exam.passages.length < 4 && (
-              <button
-                onClick={addPassage}
-                className="px-3 md:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm md:text-base"
-              >
-                + Add Passage
-              </button>
-            )}
+            <div className="flex items-center gap-3 w-full md:w-auto">
+              <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-lg px-3 py-2">
+                <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Questions / new passage</label>
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={defaultQuestionCount}
+                  onChange={(e) => setDefaultQuestionCount(Math.max(0, Math.min(parseInt(e.target.value) || 0, 50)))}
+                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-800 dark:text-gray-200 text-center"
+                />
+              </div>
+              {exam.passages.length < 4 && (
+                <button
+                  onClick={addPassage}
+                  className="px-3 md:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm md:text-base whitespace-nowrap"
+                >
+                  + Add Passage
+                </button>
+              )}
+            </div>
           </div>
 
           {exam.passages.length > 0 && (
@@ -263,19 +313,31 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
                     className="w-full md:flex-1 px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 text-sm md:text-base dark:bg-gray-800 dark:text-gray-200"
                     placeholder="Passage Title"
                   />
-                  <button
-                    onClick={() => removePassage(currentPassageIndex)}
-                    className="px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm md:text-base w-full md:w-auto"
-                  >
-                    Remove Passage
-                  </button>
+                  <div className="flex items-center gap-3 w-full md:w-auto">
+                    <div className="flex items-center gap-2">
+                      <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Questions</label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={50}
+                        value={exam.passages[currentPassageIndex].questions.length}
+                        onChange={(e) => updateQuestionCount(currentPassageIndex, parseInt(e.target.value) || 0)}
+                        className="w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-800 dark:text-gray-200 text-center"
+                      />
+                    </div>
+                    <button
+                      onClick={() => removePassage(currentPassageIndex)}
+                      className="px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm md:text-base w-full md:w-auto"
+                    >
+                      Remove Passage
+                    </button>
+                  </div>
                 </div>
-                <textarea
+                <RichTextEditor
+                  key={exam.passages[currentPassageIndex].id}
                   value={exam.passages[currentPassageIndex].passageText}
-                  onChange={(e) => updatePassage(currentPassageIndex, 'passageText', e.target.value)}
-                  rows={12}
-                  className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 font-mono text-sm dark:bg-gray-800 dark:text-gray-200"
-                  placeholder="Enter passage content (supports HTML tags)"
+                  onChange={(html) => updatePassage(currentPassageIndex, 'passageText', html)}
+                  placeholder="Enter passage content..."
                 />
 
                 {/* Audio Upload - only for listening exams */}

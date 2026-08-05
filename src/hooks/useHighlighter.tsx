@@ -102,58 +102,72 @@ export const HIGHLIGHT_COLOR_OPTIONS: { color: HighlightColor; label: string; cl
   { color: 'pink', label: 'Pink', class: 'bg-pink-200' },
 ];
 
-interface HighlightSeg {
-  text: string;
-  highlight?: { color: HighlightColor; id: string };
-}
-
 /**
- * Render text with highlight spans injected at the given offsets.
+ * Apply highlight spans into a rendered DOM root at the given text offsets.
+ * Works with HTML-rendered content by walking text nodes in document order.
  */
-export function renderHighlightedText(
-  text: string,
-  highlights: { startOffset: number; endOffset: number; color: HighlightColor; id: string }[]
-) {
-  if (highlights.length === 0) {
-    return <span>{text}</span>;
+export function applyHighlightsToDom(root: HTMLElement, highlights: Highlight[]) {
+  if (!root || highlights.length === 0) return;
+
+  const textNodes: Text[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    textNodes.push(node as Text);
+    node = walker.nextNode();
   }
 
+  const total = root.textContent?.length ?? 0;
   const sorted = [...highlights].sort((a, b) => a.startOffset - b.startOffset);
-  const segments: HighlightSeg[] = [];
-  let lastEnd = 0;
 
   for (const h of sorted) {
-    const start = Math.max(0, Math.min(h.startOffset, text.length));
-    const end = Math.max(start, Math.min(h.endOffset, text.length));
+    const start = Math.max(0, Math.min(h.startOffset, total));
+    const end = Math.max(start, Math.min(h.endOffset, total));
     if (start >= end) continue;
+    wrapTextRange(textNodes, start, end, h);
+  }
+}
 
-    if (start > lastEnd) {
-      segments.push({ text: text.slice(lastEnd, start) });
+function wrapTextRange(textNodes: Text[], start: number, end: number, h: Highlight) {
+  let offset = 0;
+
+  for (const node of textNodes) {
+    const len = node.textContent?.length ?? 0;
+    const nodeStart = offset;
+    const nodeEnd = offset + len;
+
+    if (nodeEnd <= start) {
+      offset = nodeEnd;
+      continue;
     }
-    segments.push({ text: text.slice(start, end), highlight: { color: h.color, id: h.id } });
-    lastEnd = end;
-  }
-  if (lastEnd < text.length) {
-    segments.push({ text: text.slice(lastEnd) });
-  }
+    if (nodeStart >= end) break;
 
-  return (
-    <span>
-      {segments.map((seg, i) => {
-        if (seg.highlight) {
-          const cls = HIGHLIGHT_CLASSES[seg.highlight.color] + ' rounded px-0.5 cursor-pointer';
-          return (
-            <span
-              key={seg.highlight.id}
-              className={cls}
-              data-highlight-id={seg.highlight.id}
-            >
-              {seg.text}
-            </span>
-          );
-        }
-        return <span key={i}>{seg.text}</span>;
-      })}
-    </span>
-  );
+    const cutStart = Math.max(0, start - nodeStart);
+    const cutEnd = Math.min(len, end - nodeStart);
+    if (cutEnd - cutStart <= 0) {
+      offset = nodeEnd;
+      continue;
+    }
+
+    const parent = node.parentElement;
+    if (!parent) {
+      offset = nodeEnd;
+      continue;
+    }
+
+    const before = document.createTextNode(node.textContent!.slice(0, cutStart));
+    const mid = document.createTextNode(node.textContent!.slice(cutStart, cutEnd));
+    const after = document.createTextNode(node.textContent!.slice(cutEnd));
+
+    const span = document.createElement('span');
+    span.className = `${HIGHLIGHT_CLASSES[h.color]} rounded px-0.5 cursor-pointer`;
+    span.dataset.highlightId = h.id;
+    span.appendChild(mid);
+
+    parent.replaceChild(after, node);
+    parent.insertBefore(span, after);
+    parent.insertBefore(before, span);
+
+    offset = nodeEnd;
+  }
 }

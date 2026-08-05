@@ -205,7 +205,7 @@ export const TeacherProfile: React.FC<TeacherProfileProps> = ({ user, onBack, on
                     <input
                       value={editCertificates}
                       onChange={e => setEditCertificates(e.target.value)}
-                      placeholder="Certificates (e.g. VSTEP C1 / IELTS 8.0)"
+                      placeholder="Certificates (e.g. IELTS 8.0 / TOEIC 950)"
                       className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-lg focus:ring-2 focus:ring-indigo-500 outline-none"
                     />
                   </div>

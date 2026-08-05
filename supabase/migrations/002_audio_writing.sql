@@ -1,5 +1,5 @@
 -- ==========================================================
--- VSTEP Exam App - Migration 002: Audio + Writing Grading
+-- E-Master Online Exam Center - Migration 002: Audio + Writing Grading
 -- ==========================================================
 
 -- 1. Add audio columns to passages table

@@ -80,7 +80,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
             </div>
             <div className="text-center p-4 md:p-6 bg-blue-50 dark:bg-blue-900/30 rounded-lg">
               <div className="text-2xl md:text-3xl font-bold text-blue-600 dark:text-blue-400 mb-1">{vstepScore}</div>
-              <div className="text-xs md:text-sm text-blue-800 dark:text-blue-300">VSTEP Score (0-10)</div>
+              <div className="text-xs md:text-sm text-blue-800 dark:text-blue-300">Score (0-10)</div>
             </div>
             <div className="text-center p-4 md:p-6 bg-purple-50 dark:bg-purple-900/30 rounded-lg">
               <div className="text-2xl md:text-3xl font-bold text-purple-600 dark:text-purple-400 mb-1">

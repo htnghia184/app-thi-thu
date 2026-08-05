@@ -3,8 +3,8 @@ import { VstepExamSet } from './vstepReadingMock';
 export const writingExamSets: VstepExamSet[] = [
   {
     id: 'writing-001',
-    examTitle: 'VSTEP Writing Practice Test 1',
-    description: 'Complete VSTEP Writing section: Task 1 (Email) and Task 2 (Essay). 60 minutes total.',
+    examTitle: 'English Writing Practice Test 1',
+    description: 'Complete English Writing section: Task 1 (Email) and Task 2 (Essay). 60 minutes total.',
     skillType: 'writing',
     totalDurationMinutes: 60,
     totalQuestions: 2,
