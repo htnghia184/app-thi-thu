@@ -157,7 +157,7 @@ export const ListeningView: React.FC<ListeningViewProps> = ({
                 <Volume2 size={20} className="md:size-[28px]" />
               </div>
               <div className="flex-1 min-w-0">
-                <h3 className="font-bold text-sm md:text-lg truncate">{passage.title}</h3>
+                <h3 className="font-bold text-sm md:text-lg break-words leading-snug">{passage.title}</h3>
                 <p className="text-indigo-200 text-xs md:text-sm">
                   {audioError ? (
                     'Audio unavailable'

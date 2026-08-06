@@ -132,9 +132,9 @@ export const PassageView: React.FC<PassageViewProps> = ({
   return (
     <div className="h-full overflow-y-auto bg-white dark:bg-gray-800 p-4 md:p-8 border-r border-gray-200 dark:border-gray-700 relative">
       {/* Toolbar */}
-      <div className="flex items-center justify-between mb-4 pb-3 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
-        <h1 className="text-lg md:text-2xl font-bold text-indigo-900 dark:text-gray-100 truncate">{title}</h1>
-        <div className="flex items-center gap-1 overflow-x-auto">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-2 mb-4 pb-3 border-b border-gray-100 dark:border-gray-700 sticky top-0 bg-white dark:bg-gray-800 z-10">
+          <h1 className="text-base md:text-2xl font-bold text-indigo-900 dark:text-gray-100 break-words leading-snug min-w-0">{title}</h1>
+          <div className="flex items-center gap-1 overflow-x-auto flex-shrink-0">
           <button
             onClick={onToggleHighlightMode}
             className={`p-2 rounded-lg transition-all flex items-center gap-1.5 text-sm ${

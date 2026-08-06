@@ -1,4 +1,4 @@
-import React, { useRef, useState, useCallback } from 'react';
+import React, { useRef, useState, useCallback, useEffect } from 'react';
 import {
   Bold, Italic, Underline, Strikethrough, Type, Heading2, Heading3,
   Quote, List, ListOrdered, AlignLeft, AlignCenter, AlignRight,
@@ -16,12 +16,27 @@ const BLOCK_SELECTOR = 'p,div,h1,h2,h3,h4,h5,h6,li,blockquote,pre';
 
 export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange, placeholder }) => {
   const editorRef = useRef<HTMLDivElement>(null);
+  const composingRef = useRef(false);
   const [showSource, setShowSource] = useState(false);
   const [sourceText, setSourceText] = useState('');
+
+  // Chỉ set nội dung 1 lần lúc mount (ExamForm remount qua key khi đổi passage).
+  // KHÔNG gán lại mỗi lần render — nếu không React sẽ ghi đè DOM và mất vị trí con trỏ.
+  useEffect(() => {
+    if (editorRef.current) {
+      editorRef.current.innerHTML = passageToHtml(value);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const sync = useCallback(() => {
     if (editorRef.current) onChange(editorRef.current.innerHTML);
   }, [onChange]);
+
+  const handleInput = useCallback(() => {
+    if (composingRef.current) return; // đang gõ tiếng Việt (IME) thì chờ hết composition
+    sync();
+  }, [sync]);
 
   const exec = useCallback((command: string, value?: string) => {
     editorRef.current?.focus();
@@ -35,7 +50,7 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
       setShowSource(true);
     } else {
       if (editorRef.current) {
-        editorRef.current.innerHTML = sourceText || '';
+        editorRef.current.innerHTML = passageToHtml(sourceText || '');
         onChange(sourceText || '');
       }
       setShowSource(false);
@@ -185,9 +200,10 @@ export const RichTextEditor: React.FC<RichTextEditorProps> = ({ value, onChange,
           suppressContentEditableWarning
           data-placeholder={placeholder || 'Enter passage content...'}
           className="rte-content rte-editor min-h-[220px] px-4 py-3 text-sm md:text-base text-gray-800 dark:text-gray-200 leading-relaxed focus:outline-none"
-          dangerouslySetInnerHTML={{ __html: passageToHtml(value) }}
-          onInput={sync}
+          onInput={handleInput}
           onBlur={sync}
+          onCompositionStart={() => { composingRef.current = true; }}
+          onCompositionEnd={() => { composingRef.current = false; sync(); }}
         />
       )}
     </div>

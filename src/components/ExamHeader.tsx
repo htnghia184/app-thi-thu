@@ -39,7 +39,7 @@ export const ExamHeader: React.FC<ExamHeaderProps> = ({
             ← <span className="hidden md:inline">Back</span>
           </button>
           {SkillIcon && <SkillIcon size={20} className="flex-shrink-0" />}
-          <h1 className="text-base md:text-xl font-bold truncate hidden md:block">{examTitle}</h1>
+          <h1 className="text-sm md:text-xl font-bold truncate min-w-0 flex-1">{examTitle}</h1>
         </div>
         <div className="flex items-center gap-3 md:gap-6 flex-shrink-0">
           {bookmarkedCount !== undefined && bookmarkedCount > 0 && (

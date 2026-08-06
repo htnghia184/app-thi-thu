@@ -160,8 +160,8 @@ export const WritingView: React.FC<WritingViewProps> = ({
                     <div className="flex items-center gap-2 md:gap-3">
                       <span className="text-xl md:text-2xl">{getTaskIcon(task.taskType)}</span>
                       <div className="min-w-0">
-                        <h3 className="text-sm md:text-lg font-bold truncate">Task {task.taskNumber}: {getTaskLabel(task.taskType)}</h3>
-                        <p className="text-indigo-200 text-xs md:text-sm truncate">{task.instructions}</p>
+                        <h3 className="text-sm md:text-lg font-bold break-words leading-snug">Task {task.taskNumber}: {getTaskLabel(task.taskType)}</h3>
+                        <p className="text-indigo-200 text-xs md:text-sm break-words leading-snug">{task.instructions}</p>
                       </div>
                     </div>
                     <div className="text-right flex md:flex-col items-center md:items-end gap-2 md:gap-0">

@@ -368,7 +368,7 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
               <div className="bg-gradient-to-r from-rose-600 to-pink-600 px-4 md:px-6 py-3 md:py-4 text-white">
                 <div className="flex items-center gap-2">
                   <BookOpen size={18} />
-                  <h3 className="font-bold text-sm md:text-lg truncate">{currentPassage.title}</h3>
+                  <h3 className="font-bold text-sm md:text-lg break-words leading-snug">{currentPassage.title}</h3>
                 </div>
                 {currentPassage.recommendedMinutes && (
                   <p className="text-rose-200 text-xs md:text-sm mt-1">
