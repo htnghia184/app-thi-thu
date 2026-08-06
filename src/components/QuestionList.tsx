@@ -10,6 +10,8 @@ interface QuestionListProps {
   onToggleBookmark?: (questionId: number) => void;
   isBookmarked?: (questionId: number) => boolean;
   prefix?: string;
+  /** Số thứ tự bắt đầu (tính gộp từ các passage trước) để khớp QuestionMap */
+  startNumber?: number;
 }
 
 export const QuestionList: React.FC<QuestionListProps> = ({
@@ -18,14 +20,15 @@ export const QuestionList: React.FC<QuestionListProps> = ({
   onAnswer,
   onToggleBookmark,
   isBookmarked,
-  prefix = 'question-'
+  prefix = 'question-',
+  startNumber = 0,
 }) => {
   const optionLabels = ['A', 'B', 'C', 'D'];
 
   return (
     <div className="space-y-4 md:space-y-6 pb-8">
       {questions.map((question, i) => {
-        const questionNumber = i + 1;
+        const questionNumber = startNumber + i + 1;
         const selectedAnswer = userAnswers[question.id];
         return (
         <div

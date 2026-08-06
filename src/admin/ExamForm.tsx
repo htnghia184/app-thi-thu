@@ -63,16 +63,22 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
 
   const updateMetadata = (field: keyof VstepExamSet, value: any) => {
     setExam(prev => ({ ...prev, [field]: value }));
+    // Đề writing không có bước Questions — quay về bước Passages nếu đang ở bước 3
+    if (field === 'skillType' && value === 'writing' && step > 2) {
+      setStep(2);
+    }
   };
 
   const addPassage = () => {
     const newId = Math.max(...exam.passages.map(p => p.id), 0) + 1;
+    const isWriting = exam.skillType === 'writing';
     const firstQuestionId = getNextQuestionId();
     const newPassage: Passage = {
       id: newId,
-      title: `New Passage ${exam.passages.length + 1}`,
+      title: isWriting ? `Task ${exam.passages.length + 1}` : `New Passage ${exam.passages.length + 1}`,
       passageText: '',
-      questions: Array.from({ length: defaultQuestionCount }, (_, i) => ({
+      // Đề writing không có câu hỏi trắc nghiệm — mỗi passage là một task
+      questions: isWriting ? [] : Array.from({ length: defaultQuestionCount }, (_, i) => ({
         id: firstQuestionId + i,
         questionText: '',
         options: ['', '', '', ''],
@@ -84,7 +90,7 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
     setExam(prev => ({
       ...prev,
       passages: [...prev.passages, newPassage],
-      totalQuestions: prev.passages.reduce((sum, p) => sum + p.questions.length, 0) + defaultQuestionCount
+      totalQuestions: prev.passages.reduce((sum, p) => sum + p.questions.length, 0) + (isWriting ? 0 : defaultQuestionCount)
     }));
   };
 
@@ -185,7 +191,7 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
 
       {/* Step Indicator */}
       <div className="flex items-center gap-2 md:gap-4 mb-6 md:mb-8 border-b border-gray-200 dark:border-gray-700 pb-4 overflow-x-auto">
-        {[1, 2, 3].map(num => (
+        {[1, 2, 3].filter(n => exam.skillType !== 'writing' || n <= 2).map(num => (
           <div
             key={num}
             className={`flex items-center gap-1 md:gap-2 cursor-pointer transition-all whitespace-nowrap ${step >= num ? 'text-indigo-600 dark:text-indigo-400 font-semibold' : 'text-gray-400 dark:text-gray-500'}`}
@@ -262,25 +268,31 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
       {step === 2 && (
         <div>
           <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3 mb-4 md:mb-6">
-            <h3 className="text-lg md:text-xl font-semibold text-indigo-900 dark:text-gray-100">Passages ({exam.passages.length}/4)</h3>
+            <h3 className="text-lg md:text-xl font-semibold text-indigo-900 dark:text-gray-100">
+              {exam.skillType === 'writing'
+                ? `Tasks (${exam.passages.length})`
+                : `Passages (${exam.passages.length}/4)`}
+            </h3>
             <div className="flex items-center gap-3 w-full md:w-auto">
-              <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-lg px-3 py-2">
-                <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Questions / new passage</label>
-                <input
-                  type="number"
-                  min={1}
-                  max={50}
-                  value={defaultQuestionCount}
-                  onChange={(e) => setDefaultQuestionCount(Math.max(0, Math.min(parseInt(e.target.value) || 0, 50)))}
-                  className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-800 dark:text-gray-200 text-center"
-                />
-              </div>
-              {exam.passages.length < 4 && (
+              {exam.skillType !== 'writing' && (
+                <div className="flex items-center gap-2 bg-gray-50 dark:bg-gray-700 rounded-lg px-3 py-2">
+                  <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Questions / new passage</label>
+                  <input
+                    type="number"
+                    min={1}
+                    max={50}
+                    value={defaultQuestionCount}
+                    onChange={(e) => setDefaultQuestionCount(Math.max(0, Math.min(parseInt(e.target.value) || 0, 50)))}
+                    className="w-16 px-2 py-1 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-800 dark:text-gray-200 text-center"
+                  />
+                </div>
+              )}
+              {exam.passages.length < (exam.skillType === 'writing' ? 20 : 4) && (
                 <button
                   onClick={addPassage}
                   className="px-3 md:px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 text-sm md:text-base whitespace-nowrap"
                 >
-                  + Add Passage
+                  + Add {exam.skillType === 'writing' ? 'Task' : 'Passage'}
                 </button>
               )}
             </div>
@@ -299,7 +311,7 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
                         : 'border-gray-300 dark:border-gray-600 hover:border-indigo-300 dark:hover:border-indigo-500'
                     }`}
                   >
-                    Passage {index + 1}: {passage.title || 'Untitled'}
+                    {exam.skillType === 'writing' ? `Task ${index + 1}` : `Passage ${index + 1}`}: {passage.title || 'Untitled'}
                   </button>
                 ))}
               </div>
@@ -314,22 +326,24 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
                     placeholder="Passage Title"
                   />
                   <div className="flex items-center gap-3 w-full md:w-auto">
-                    <div className="flex items-center gap-2">
-                      <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Questions</label>
-                      <input
-                        type="number"
-                        min={0}
-                        max={50}
-                        value={exam.passages[currentPassageIndex].questions.length}
-                        onChange={(e) => updateQuestionCount(currentPassageIndex, parseInt(e.target.value) || 0)}
-                        className="w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-800 dark:text-gray-200 text-center"
-                      />
-                    </div>
+                    {exam.skillType !== 'writing' && (
+                      <div className="flex items-center gap-2">
+                        <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Questions</label>
+                        <input
+                          type="number"
+                          min={0}
+                          max={50}
+                          value={exam.passages[currentPassageIndex].questions.length}
+                          onChange={(e) => updateQuestionCount(currentPassageIndex, parseInt(e.target.value) || 0)}
+                          className="w-16 px-2 py-1.5 border border-gray-300 dark:border-gray-600 rounded-md text-sm dark:bg-gray-800 dark:text-gray-200 text-center"
+                        />
+                      </div>
+                    )}
                     <button
                       onClick={() => removePassage(currentPassageIndex)}
                       className="px-3 py-2 bg-red-100 dark:bg-red-900/30 text-red-700 dark:text-red-300 rounded-lg hover:bg-red-200 dark:hover:bg-red-900/50 text-sm md:text-base w-full md:w-auto"
                     >
-                      Remove Passage
+                      Remove {exam.skillType === 'writing' ? 'Task' : 'Passage'}
                     </button>
                   </div>
                 </div>
@@ -339,6 +353,44 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
                   onChange={(html) => updatePassage(currentPassageIndex, 'passageText', html)}
                   placeholder="Enter passage content..."
                 />
+
+                {/* Writing Task config - only for writing exams */}
+                {exam.skillType === 'writing' && (
+                  <div className="mt-6 border-t border-gray-200 pt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Task Type</label>
+                      <select
+                        value={exam.passages[currentPassageIndex].taskType || 'essay'}
+                        onChange={(e) => updatePassage(currentPassageIndex, 'taskType', e.target.value)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-gray-200"
+                      >
+                        <option value="email">Email</option>
+                        <option value="essay">Essay</option>
+                        <option value="letter">Letter</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Word Limit</label>
+                      <input
+                        type="number"
+                        min={0}
+                        value={exam.passages[currentPassageIndex].wordLimit ?? 0}
+                        onChange={(e) => updatePassage(currentPassageIndex, 'wordLimit', parseInt(e.target.value) || 0)}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-gray-200"
+                      />
+                    </div>
+                    <div className="md:col-span-2">
+                      <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Instructions</label>
+                      <textarea
+                        value={exam.passages[currentPassageIndex].instructions || ''}
+                        onChange={(e) => updatePassage(currentPassageIndex, 'instructions', e.target.value)}
+                        rows={2}
+                        className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg dark:bg-gray-800 dark:text-gray-200"
+                        placeholder="e.g. Write a response of about 150 words. Spend approximately 20 minutes on this task."
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {/* Audio Upload - only for listening exams */}
                 {exam.skillType === 'listening' && (
@@ -425,19 +477,29 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
             >
               Back
             </button>
-            <button
-              onClick={() => setStep(3)}
-              disabled={exam.passages.length === 0}
-              className="px-4 md:px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
-            >
-              Next: Add Questions
-            </button>
+            {exam.skillType === 'writing' ? (
+              <button
+                onClick={handleSave}
+                disabled={saving || exam.passages.length === 0}
+                className="px-4 md:px-6 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+              >
+                {saving ? 'Saving...' : 'Save Exam'}
+              </button>
+            ) : (
+              <button
+                onClick={() => setStep(3)}
+                disabled={exam.passages.length === 0}
+                className="px-4 md:px-6 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 disabled:opacity-50 disabled:cursor-not-allowed text-sm md:text-base"
+              >
+                Next: Add Questions
+              </button>
+            )}
           </div>
         </div>
       )}
 
-      {/* Step 3: Questions */}
-      {step === 3 && (
+      {/* Step 3: Questions (không áp dụng cho đề writing) */}
+      {exam.skillType !== 'writing' && step === 3 && (
         <div>
           <div className="flex items-center gap-2 md:gap-4 mb-4 md:mb-6 overflow-x-auto pb-2">
             {exam.passages.map((passage, index) => (

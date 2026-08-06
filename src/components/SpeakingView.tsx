@@ -176,7 +176,7 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
       const submission = await submitSpeakingSubmission(
         userId,
         examId,
-        currentPassage.id,
+        currentPassageIndex + 1,
         currentPassage.title,
         audioUrl,
         currentRecording.durationSeconds
@@ -190,18 +190,6 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
           submissionId: submission.id,
         },
       }));
-
-      // Check if all passages have been submitted
-      const allDone = passages.every(p => {
-        const rec = recordings[p.id];
-        return rec?.state === 'submitted' || rec?.state === 'uploading';
-      });
-
-      if (allDone) {
-        setTimeout(() => {
-          if (onSpeakingSubmit) onSpeakingSubmit();
-        }, 1500);
-      }
     } catch (err: any) {
       setError(err.message || 'Failed to submit recording');
       setRecordings(prev => ({
@@ -230,6 +218,16 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
     const rec = recordings[p.id];
     return rec?.state === 'submitted' || rec?.state === 'uploading';
   });
+
+  // Tự động kết thúc khi tất cả các phần đã submit xong
+  useEffect(() => {
+    if (canFinishAll && passages.length > 0) {
+      const t = setTimeout(() => {
+        if (onSpeakingSubmit) onSpeakingSubmit();
+      }, 1500);
+      return () => clearTimeout(t);
+    }
+  }, [canFinishAll, passages.length, onSpeakingSubmit]);
 
   const formatDuration = (seconds: number) => {
     const m = Math.floor(seconds / 60);
@@ -411,8 +409,8 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
               </button>
             ) : (
               <button
-                onClick={handleSubmit}
-                disabled={canFinishAll}
+                onClick={() => { if (onSpeakingSubmit) onSpeakingSubmit(); }}
+                disabled={!canFinishAll}
                 className="flex items-center gap-2 px-6 py-3 bg-gradient-to-r from-emerald-500 to-emerald-700 text-white rounded-xl font-bold hover:shadow-xl transition-all shadow-lg disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 {canFinishAll ? (
@@ -423,7 +421,7 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
                 ) : (
                   <>
                     <Save size={20} />
-                    Submit All Recordings
+                    Complete all parts to finish
                   </>
                 )}
               </button>

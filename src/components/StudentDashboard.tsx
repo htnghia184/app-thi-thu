@@ -208,23 +208,19 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     loadAssignments();
   }, [user.id]);
 
-  // Build a map from exam_id -> assignment for quick lookup
-  const assignmentMap = new Map<string, Assignment & { class_name?: string }>();
+  // Join each assignment with its exam — mỗi assignment hiển thị như một bài riêng,
+  // không gộp theo exam_id (cùng 1 đề được assign nhiều lần vẫn hiện đủ).
+  const assignmentCards: { assignment: Assignment & { class_name?: string }; exam: VstepExamSet }[] = [];
   assignments.forEach(a => {
-    if (!assignmentMap.has(a.exam_id)) {
-      assignmentMap.set(a.exam_id, a);
-    }
+    const exam = exams.find(e => e.id === a.exam_id);
+    if (exam) assignmentCards.push({ assignment: a, exam });
   });
 
-  // Exams that match the student's assignments
-  const assignedExamIds = new Set(assignments.map(a => a.exam_id));
-  const assignedExams = exams.filter(e => assignedExamIds.has(e.id));
-
-  // Filter by skill, and by assignment if user is logged in
-  const skillFiltered = skillFilter === 'all' ? exams : exams.filter(e => e.skillType === skillFilter);
-  const filteredExams = user
-    ? skillFiltered.filter(e => assignedExamIds.has(e.id))
-    : skillFiltered;
+  // Filter by skill (chỉ hiển thị assignment khi đã đăng nhập)
+  const skillFilteredCards = skillFilter === 'all'
+    ? assignmentCards
+    : assignmentCards.filter(({ exam }) => exam.skillType === skillFilter);
+  const filteredCards = user ? skillFilteredCards : assignmentCards;
 
   const hasNoClasses = user && !assignmentsLoading && assignments.length === 0;
 
@@ -423,7 +419,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
 
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-6 text-center">
             <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-1">
-              {assignmentsLoading ? '...' : assignedExams.length}
+              {assignmentsLoading ? '...' : assignmentCards.length}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
               <FileText size={14} /> Available Tests
@@ -450,8 +446,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           {(['all', 'reading', 'listening', 'writing', 'speaking'] as SkillFilter[]).map((filter) => {
             const isActive = skillFilter === filter;
             const countForFilter = filter === 'all'
-              ? (user ? assignedExams.length : exams.length)
-              : (user ? assignedExams.filter(e => e.skillType === filter).length : exams.filter(e => e.skillType === filter).length);
+              ? (user ? assignmentCards.length : exams.length)
+              : (user ? assignmentCards.filter(({ exam }) => exam.skillType === filter).length : exams.filter(e => e.skillType === filter).length);
             return (
               <button
                 key={filter}
@@ -488,17 +484,16 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   <h3 className="text-lg font-semibold text-gray-700 dark:text-gray-300 mb-2">You are not enrolled in any class yet</h3>
                   <p className="text-gray-500 dark:text-gray-400 text-sm">Ask your teacher to add you.</p>
                 </div>
-              ) : filteredExams.length === 0 ? (
+              ) : filteredCards.length === 0 ? (
                 <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-8 text-center text-gray-500 dark:text-gray-400">
                   No exams available for this skill.
                 </div>
               ) : (
-                filteredExams.map(exam => {
+                filteredCards.map(({ assignment, exam }) => {
                   const Icon = getExamIcon(exam.skillType);
                   const config = skillConfig[exam.skillType];
-                  const assignment = assignmentMap.get(exam.id);
                   return (
-                    <div key={exam.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-6 hover:shadow-xl dark:hover:shadow-gray-900/50 transition-shadow">
+                    <div key={assignment.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-6 hover:shadow-xl dark:hover:shadow-gray-900/50 transition-shadow">
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 md:gap-0">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 md:gap-3 mb-2">
@@ -518,19 +513,17 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             )}
                             <span className="flex items-center gap-1"><BarChart3 size={12} className="md:size-[14px]" /> {exam.totalQuestions} questions</span>
                           </div>
-                          {assignment && (
-                            <div className="mt-2 md:mt-3 flex items-center gap-2 md:gap-3 flex-wrap">
-                              {getDeadlineBadge(assignment.deadline)}
-                              <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                                <Calendar size={12} /> Deadline: {formatDeadline(assignment.deadline)}
+                          <div className="mt-2 md:mt-3 flex items-center gap-2 md:gap-3 flex-wrap">
+                            {getDeadlineBadge(assignment.deadline)}
+                            <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                              <Calendar size={12} /> Deadline: {formatDeadline(assignment.deadline)}
+                            </span>
+                            {assignment.class_name && (
+                              <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-full font-medium">
+                                {assignment.class_name}
                               </span>
-                              {assignment.class_name && (
-                                <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-full font-medium">
-                                  {assignment.class_name}
-                                </span>
-                              )}
-                            </div>
-                          )}
+                            )}
+                          </div>
                         </div>
                         <button
                           onClick={() => onStartExam(exam.id)}

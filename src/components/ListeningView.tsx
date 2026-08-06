@@ -1,19 +1,12 @@
 import React, { useState, useCallback, useRef, useEffect } from 'react';
-import { Volume2, Play, CheckCircle, AlertCircle, Headphones, Bookmark, BookmarkCheck } from 'lucide-react';
+import { Volume2, Play, CheckCircle, AlertCircle, Headphones, BookOpenText } from 'lucide-react';
 import { Passage } from '../data/vstepReadingMock';
-import { QuestionMap } from './QuestionMap';
 import { getAudioUrl } from '../lib/supabaseService';
 
 interface ListeningViewProps {
   passages: Passage[];
   currentPassageIndex: number;
-  userAnswers: Record<number, number | null>;
-  onAnswer: (questionId: number, answer: number | null) => void;
   onSelectPassage: (index: number) => void;
-  onQuestionClick: (questionId: number) => void;
-  onToggleBookmark?: (questionId: number) => void;
-  isBookmarked?: (questionId: number) => boolean;
-  bookmarkedQuestions?: Set<number>;
 }
 
 function formatTime(seconds: number): string {
@@ -25,13 +18,7 @@ function formatTime(seconds: number): string {
 export const ListeningView: React.FC<ListeningViewProps> = ({
   passages,
   currentPassageIndex,
-  userAnswers,
-  onAnswer,
   onSelectPassage,
-  onQuestionClick,
-  onToggleBookmark,
-  isBookmarked,
-  bookmarkedQuestions,
 }) => {
   const passage = passages[currentPassageIndex];
   const [hasPlayed, setHasPlayed] = useState<Record<number, boolean>>({});
@@ -222,72 +209,24 @@ export const ListeningView: React.FC<ListeningViewProps> = ({
             )}
           </div>
 
-          {/* Questions */}
-          <div className="mb-4">
-            <QuestionMap
-              passages={[passage]}
-              userAnswers={userAnswers}
-              currentPassageIndex={0}
-              onQuestionClick={(id) => {
-                onQuestionClick(id);
-                document.getElementById(`listening-q-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
-              }}
-              bookmarkedQuestions={bookmarkedQuestions}
-              onToggleBookmark={onToggleBookmark}
-            />
-          </div>
-
-          <div className="space-y-4">
-            {passage.questions.map((q) => (
+          {/* Hướng dẫn làm bài + content passage */}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-6">
+            <div className="flex items-center gap-2 md:gap-3 mb-3 md:mb-4">
+              <BookOpenText size={18} className="text-indigo-600 flex-shrink-0" />
+              <h4 className="text-sm md:text-base font-semibold text-indigo-900 dark:text-gray-100">
+                Instruction
+              </h4>
+            </div>
+            {passage.passageText && passage.passageText.trim() ? (
               <div
-                key={q.id}
-                id={`listening-q-${q.id}`}
-                className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-6 hover:shadow-xl transition-shadow"
-              >
-                <div className="flex items-start justify-between gap-2 mb-4">
-                  <p className="font-semibold text-sm md:text-base text-indigo-900 dark:text-gray-100">
-                    <span className="text-indigo-500 mr-2">Q{q.id}.</span>
-                    {q.questionText}
-                  </p>
-                  {onToggleBookmark && (
-                    <button
-                      onClick={() => onToggleBookmark(q.id)}
-                      className="p-1.5 rounded-lg hover:bg-amber-50 dark:hover:bg-amber-900/30 transition-colors flex-shrink-0"
-                      title={isBookmarked?.(q.id) ? 'Remove bookmark' : 'Bookmark for review'}
-                    >
-                      {isBookmarked?.(q.id) ? (
-                        <BookmarkCheck size={16} className="text-amber-500 fill-amber-500" />
-                      ) : (
-                        <Bookmark size={16} className="text-gray-400 hover:text-amber-500" />
-                      )}
-                    </button>
-                  )}
-                </div>
-                <div className="grid grid-cols-1 gap-2">
-                  {q.options.map((opt, oi) => {
-                    const isSelected = userAnswers[q.id] === oi;
-                    return (
-                      <button
-                        key={oi}
-                        onClick={() => onAnswer(q.id, oi)}
-                        className={`flex items-center gap-3 p-3 rounded-xl border-2 transition-all text-left min-h-[44px] ${
-                          isSelected
-                            ? 'border-indigo-500 bg-indigo-50 text-indigo-900 font-medium'
-                            : 'border-gray-200 dark:border-gray-600 hover:border-indigo-300 hover:bg-indigo-50/50 dark:hover:bg-gray-700 text-gray-700 dark:text-gray-300'
-                        }`}
-                      >
-                        <span className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0 ${
-                          isSelected ? 'bg-indigo-600 text-white' : 'bg-gray-100 dark:bg-gray-700 text-gray-500 dark:text-gray-400'
-                        }`}>
-                          {String.fromCharCode(65 + oi)}
-                        </span>
-                        <span className="text-xs md:text-sm">{opt}</span>
-                      </button>
-                    );
-                  })}
-                </div>
+                className="prose prose-sm md:prose-base max-w-none text-gray-700 dark:text-gray-300 leading-relaxed [&_p]:my-2 [&_span]:my-1"
+                dangerouslySetInnerHTML={{ __html: passage.passageText }}
+              />
+            ) : (
+              <div className="text-sm md:text-base text-gray-700 dark:text-gray-300 leading-relaxed whitespace-pre-line">
+                Click Play to listen to the audio. After listening, answer the questions on the right panel. Each audio can only be played once.
               </div>
-            ))}
+            )}
           </div>
         </div>
       </div>

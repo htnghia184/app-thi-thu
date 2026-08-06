@@ -33,6 +33,10 @@ export interface Passage {
   audioUrl?: string;
   questions: Question[];
   recommendedMinutes?: number;
+  /** Chỉ dùng cho đề writing: loại task (email/essay/letter) */
+  taskType?: WritingTask['taskType'];
+  wordLimit?: number;
+  instructions?: string;
 }
 
 export interface WritingTask {

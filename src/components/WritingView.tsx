@@ -149,8 +149,9 @@ export const WritingView: React.FC<WritingViewProps> = ({
 
           {tasks.map((task) => {
             const wordCount = getWordCount(writingAnswers[task.id] || '');
-            const isOverLimit = wordCount > task.wordLimit;
-            const wordPercent = Math.min((wordCount / task.wordLimit) * 100, 100);
+            const hasLimit = task.wordLimit > 0;
+            const isOverLimit = hasLimit && wordCount > task.wordLimit;
+            const wordPercent = hasLimit ? Math.min((wordCount / task.wordLimit) * 100, 100) : 0;
 
             return (
               <div key={task.id} className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl dark:shadow-gray-900/30 overflow-hidden">
@@ -166,7 +167,7 @@ export const WritingView: React.FC<WritingViewProps> = ({
                     </div>
                     <div className="text-right flex md:flex-col items-center md:items-end gap-2 md:gap-0">
                       <div className="text-xs md:text-sm text-indigo-200">Word Limit</div>
-                      <div className="text-lg md:text-xl font-bold">{task.wordLimit}</div>
+                      <div className="text-lg md:text-xl font-bold">{hasLimit ? task.wordLimit : '—'}</div>
                     </div>
                   </div>
                 </div>
@@ -217,7 +218,7 @@ export const WritingView: React.FC<WritingViewProps> = ({
                           <span>Over word limit ({wordCount}/{task.wordLimit})</span>
                         </div>
                       )}
-                      {!isOverLimit && wordCount > 0 && (
+                      {!isOverLimit && hasLimit && wordCount > 0 && (
                         <span className={`text-xs font-medium ${
                           wordCount >= task.wordLimit * 0.9 ? 'text-green-600 dark:text-green-400' : 'text-gray-400'
                         }`}>

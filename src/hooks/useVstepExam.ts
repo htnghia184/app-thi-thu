@@ -112,6 +112,11 @@ export function useVstepExamState(exam: VstepExamSet, userId?: string) {
     if (userId) {
       setSubmitting(true);
       try {
+        // Đề không có câu hỏi trắc nghiệm (speaking/writing thuần) thì không ghi exam_result
+        if (allQuestions.length === 0) {
+          clearSavedProgress();
+          return;
+        }
         let correctCount = 0;
         allQuestions.forEach(q => {
           if (userAnswers[q.id] === q.correctAnswer) correctCount++;

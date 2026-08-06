@@ -1,7 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
 import { VstepExamSet } from './data/vstepReadingMock';
-import { listeningExamSets } from './data/vstepListeningMock';
-import { writingExamSets } from './data/vstepWritingMock';
 import { useVstepExamState } from './hooks/useVstepExam';
 import { useTimer } from './hooks/useTimer';
 import { useHighlighter } from './hooks/useHighlighter';
@@ -98,22 +96,15 @@ function App() {
     checkAuth();
   }, []);
 
-  // Load exams from Supabase + mock data
+  // Load exams from Supabase
   const loadExams = useCallback(async () => {
     setExamsLoading(true);
     try {
       const supabaseExams = await fetchExams();
-      // Merge supabase exams with local mock data for listening + writing
-      const allExams = [
-        ...(supabaseExams || []),
-        ...listeningExamSets,
-        ...writingExamSets,
-      ];
-      setExams(allExams);
+      setExams(supabaseExams || []);
     } catch (err: any) {
       console.error('Failed to load exams:', err);
-      // Fallback to mock data only
-      setExams([...listeningExamSets, ...writingExamSets]);
+      setExams([]);
     } finally {
       setExamsLoading(false);
     }
@@ -223,6 +214,10 @@ function App() {
   const skillType = selectedExam?.skillType || 'reading';
   const [mobileReadingTab, setMobileReadingTab] = useState<'passage' | 'questions'>('passage');
   const answeredCount = Object.values(examState.userAnswers).filter(a => a !== null && a !== undefined).length;
+
+  // Số thứ tự câu hỏi bắt đầu của passage tại index — để QuestionList đánh số liên tục khớp QuestionMap
+  const passageStartNumber = (index: number) =>
+    (selectedExam?.passages.slice(0, index).reduce((sum, p) => sum + p.questions.length, 0)) || 0;
 
   // Loading auth
   if (loading) {
@@ -497,6 +492,7 @@ function App() {
                     onAnswer={examState.answerQuestion}
                     onToggleBookmark={examState.toggleBookmark}
                     isBookmarked={examState.isBookmarked}
+                    startNumber={passageStartNumber(examState.currentPassageIndex)}
                   />
                   <div className="h-20" />
                 </div>
@@ -512,13 +508,7 @@ function App() {
               <ListeningView
                 passages={selectedExam.passages}
                 currentPassageIndex={examState.currentPassageIndex}
-                userAnswers={examState.userAnswers}
-                onAnswer={examState.answerQuestion}
                 onSelectPassage={examState.selectPassage}
-                onQuestionClick={handleQuestionClick}
-                onToggleBookmark={examState.toggleBookmark}
-                isBookmarked={examState.isBookmarked}
-                bookmarkedQuestions={examState.bookmarkedQuestions}
               />
             </div>
             <div className="w-full md:w-1/2 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
@@ -550,6 +540,7 @@ function App() {
                     onToggleBookmark={examState.toggleBookmark}
                     isBookmarked={examState.isBookmarked}
                     prefix="listening-q-"
+                    startNumber={passageStartNumber(examState.currentPassageIndex)}
                   />
                   <div className="h-20" />
                 </div>

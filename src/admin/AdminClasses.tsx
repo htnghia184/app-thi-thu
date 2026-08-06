@@ -10,8 +10,6 @@ import {
   Plus, ArrowLeft, Edit3, Trash2, Users, UserCheck, Loader2, X, ChevronRight, School, ClipboardList, Clock, AlertTriangle
 } from 'lucide-react';
 import { ClassAnalytics } from './ClassAnalytics';
-import { listeningExamSets } from '../data/vstepListeningMock';
-import { writingExamSets } from '../data/vstepWritingMock';
 
 type ViewMode = 'list' | 'detail' | 'form' | 'analytics';
 type FormMode = 'create' | 'edit';
@@ -42,6 +40,7 @@ export const AdminClasses: React.FC<{ userId: string }> = ({ userId }) => {
   const [assignmentExamId, setAssignmentExamId] = useState('');
   const [assignmentDeadline, setAssignmentDeadline] = useState('');
   const [assignmentCreating, setAssignmentCreating] = useState(false);
+  const [assignmentError, setAssignmentError] = useState('');
   const [selectedAssignment, setSelectedAssignment] = useState<Assignment | null>(null);
 
   const loadClasses = async () => {
@@ -176,12 +175,9 @@ export const AdminClasses: React.FC<{ userId: string }> = ({ userId }) => {
         fetchClassAssignments(classId),
         fetchExams(),
       ]);
-      // Merge Supabase exams with local mock data so all exams appear in assignment select
-      const allExams = [
-        ...(supabaseExams || []),
-        ...listeningExamSets,
-        ...writingExamSets,
-      ];
+      // fetchExams() trả về mọi đề trong bảng exams (reading/speaking + listening/writing
+      // đã được seed) nên dropdown assign được đủ 4 kỹ năng.
+      const allExams = [...(supabaseExams || [])];
       setAssignments(assignData);
       setAllExams(allExams);
     } catch (err) {
@@ -190,7 +186,12 @@ export const AdminClasses: React.FC<{ userId: string }> = ({ userId }) => {
   };
 
   const handleCreateAssignment = async () => {
-    if (!selectedClass || !assignmentTitle.trim() || !assignmentExamId || !assignmentDeadline) return;
+    setAssignmentError('');
+    if (!selectedClass) return;
+    if (!assignmentTitle.trim() || !assignmentExamId || !assignmentDeadline) {
+      setAssignmentError('Vui lòng điền đầy đủ: tiêu đề, đề thi và hạn nộp.');
+      return;
+    }
     setAssignmentCreating(true);
     try {
       const payload: CreateAssignmentPayload = {
@@ -205,8 +206,20 @@ export const AdminClasses: React.FC<{ userId: string }> = ({ userId }) => {
       setAssignmentTitle('');
       setAssignmentExamId('');
       setAssignmentDeadline('');
+      setAssignmentError('');
       loadAssignments(selectedClass.id);
-    } catch (err) {
+    } catch (err: any) {
+      // Map lỗi Supabase sang thông báo tiếng Việt dễ hiểu
+      const code = err?.code;
+      if (code === '23503') {
+        setAssignmentError('Không thể tạo bài tập: đề thi không tồn tại hoặc đã bị xóa. Vui lòng chọn đề khác.');
+      } else if (code === '42501') {
+        setAssignmentError('Bạn không có quyền tạo bài tập cho lớp này.');
+      } else if (code === '23505') {
+        setAssignmentError('Bài tập này đã tồn tại.');
+      } else {
+        setAssignmentError('Không thể tạo bài tập. Vui lòng thử lại.');
+      }
       console.error('Failed to create assignment:', err);
     } finally {
       setAssignmentCreating(false);
@@ -446,6 +459,11 @@ export const AdminClasses: React.FC<{ userId: string }> = ({ userId }) => {
                   className="w-full px-4 py-2.5 rounded-xl border border-gray-300 focus:ring-2 focus:ring-indigo-500 focus:border-transparent outline-none text-sm"
                 />
               </div>
+              {assignmentError && (
+                <p className="text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                  {assignmentError}
+                </p>
+              )}
               <div className="flex gap-2 pt-1">
                 <button
                   onClick={handleCreateAssignment}

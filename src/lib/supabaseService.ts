@@ -1,5 +1,5 @@
 import { supabase } from './supabaseClient';
-import { VstepExamSet, Passage, Question } from '../data/vstepReadingMock';
+import { VstepExamSet, Passage, Question, WritingTask } from '../data/vstepReadingMock';
 
 // ==================== Auth & Profile ====================
 
@@ -87,8 +87,24 @@ export async function fetchExams(): Promise<VstepExamSet[]> {
         title: passageRow.title,
         passageText: passageRow.content,
         questions,
+        audioUrl: passageRow.audio_url || '',
+        taskType: passageRow.task_type || undefined,
+        wordLimit: passageRow.word_limit ?? undefined,
+        instructions: passageRow.instructions || '',
       });
     }
+
+    const isWriting = (examRow.skill_type || 'reading') === 'writing';
+    const writingTasks: WritingTask[] | undefined = isWriting
+      ? passages.map((p, i) => ({
+          id: i + 1,
+          taskNumber: i + 1,
+          taskType: (p.taskType || 'essay') as WritingTask['taskType'],
+          prompt: p.passageText,
+          wordLimit: p.wordLimit || 0,
+          instructions: p.instructions || '',
+        }))
+      : undefined;
 
     exams.push({
       id: examRow.id,
@@ -96,8 +112,9 @@ export async function fetchExams(): Promise<VstepExamSet[]> {
       description: examRow.description || '',
       skillType: examRow.skill_type || 'reading',
       totalDurationMinutes: examRow.duration_minutes,
-      totalQuestions: passages.reduce((sum, p) => sum + p.questions.length, 0),
+      totalQuestions: isWriting ? (writingTasks?.length || 0) : passages.reduce((sum, p) => sum + p.questions.length, 0),
       passages,
+      writingTasks,
       createdAt: examRow.created_at,
     });
   }
@@ -151,8 +168,24 @@ export async function fetchExamById(examId: string): Promise<VstepExamSet | null
       title: passageRow.title,
       passageText: passageRow.content,
       questions,
+      audioUrl: passageRow.audio_url || '',
+      taskType: passageRow.task_type || undefined,
+      wordLimit: passageRow.word_limit ?? undefined,
+      instructions: passageRow.instructions || '',
     });
   }
+
+  const isWriting = (examRow.skill_type || 'reading') === 'writing';
+  const writingTasks: WritingTask[] | undefined = isWriting
+    ? passages.map((p, i) => ({
+        id: i + 1,
+        taskNumber: i + 1,
+        taskType: (p.taskType || 'essay') as WritingTask['taskType'],
+        prompt: p.passageText,
+        wordLimit: p.wordLimit || 0,
+        instructions: p.instructions || '',
+      }))
+    : undefined;
 
   return {
     id: examRow.id,
@@ -160,8 +193,9 @@ export async function fetchExamById(examId: string): Promise<VstepExamSet | null
     description: examRow.description || '',
     skillType: examRow.skill_type || 'reading',
     totalDurationMinutes: examRow.duration_minutes,
-    totalQuestions: passages.reduce((sum, p) => sum + p.questions.length, 0),
+    totalQuestions: isWriting ? (writingTasks?.length || 0) : passages.reduce((sum, p) => sum + p.questions.length, 0),
     passages,
+    writingTasks,
     createdAt: examRow.created_at,
   };
 }
@@ -228,6 +262,10 @@ export async function upsertExam(exam: VstepExamSet, userId?: string): Promise<v
         passage_number: pi + 1,
         title: passage.title,
         content: passage.passageText,
+        audio_url: passage.audioUrl || '',
+        task_type: passage.taskType || '',
+        word_limit: passage.wordLimit ?? null,
+        instructions: passage.instructions || '',
       })
       .select()
       .single();
@@ -1177,7 +1215,7 @@ export async function uploadSpeakingAudio(
 export async function submitSpeakingSubmission(
   userId: string,
   examId: string,
-  passageId: number,
+  passageNumber: number,
   passageTitle: string,
   audioUrl: string,
   durationSeconds: number
@@ -1187,7 +1225,7 @@ export async function submitSpeakingSubmission(
     .insert({
       user_id: userId,
       exam_id: examId,
-      passage_id: passageId,
+      passage_id: passageNumber,
       passage_title: passageTitle,
       audio_url: audioUrl,
       duration_seconds: durationSeconds,
