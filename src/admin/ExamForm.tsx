@@ -234,6 +234,20 @@ export const ExamForm: React.FC<ExamFormProps> = ({ initialExam, onSave, onCance
             </select>
           </div>
           <div>
+            <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Status</label>
+            <select
+              value={exam.status || 'private'}
+              onChange={(e) => updateMetadata('status', e.target.value as 'public' | 'private')}
+              className="w-full px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200"
+            >
+              <option value="private">Private (only assigned students)</option>
+              <option value="public">Public (guests can take for free)</option>
+            </select>
+            <p className="mt-1 text-xs text-gray-400 dark:text-gray-500">
+              Public exams appear for guests without an account.
+            </p>
+          </div>
+          <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Duration (minutes)</label>
             <input
               type="number"

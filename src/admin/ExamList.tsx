@@ -18,6 +18,14 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
     });
   };
 
+  const statusBadge = (status?: 'public' | 'private') => (
+    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-semibold flex-shrink-0 ${
+      status === 'public' ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300' : 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+    }`}>
+      {status === 'public' ? 'Public' : 'Private'}
+    </span>
+  );
+
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-8">
       <div className="flex items-center justify-between mb-6 md:mb-8">
@@ -32,7 +40,8 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
             totalQuestions: 40,
             passages: [],
             writingTasks: [],
-            createdAt: new Date().toISOString()
+            createdAt: new Date().toISOString(),
+            status: 'private',
           })}
           className="bg-gradient-to-r from-indigo-600 to-indigo-700 text-white px-4 md:px-6 py-2.5 md:py-3 rounded-lg font-semibold text-sm md:text-base hover:from-indigo-700 hover:to-indigo-800 transition-all"
         >
@@ -64,6 +73,7 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
                    exam.skillType === 'listening' ? 'Listening' :
                    exam.skillType === 'speaking' ? 'Speaking' : 'Writing'}
                 </span>
+                {statusBadge(exam.status)}
               </div>
               <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 mb-3">
                 <span>{exam.totalDurationMinutes} mins</span>
@@ -94,6 +104,7 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
             <tr className="border-b border-gray-200 dark:border-gray-700">
               <th className="text-left py-4 px-4 text-indigo-900 dark:text-gray-100 font-semibold">Title</th>
               <th className="text-left py-4 px-4 text-indigo-900 dark:text-gray-100 font-semibold">Skill</th>
+              <th className="text-left py-4 px-4 text-indigo-900 dark:text-gray-100 font-semibold">Status</th>
               <th className="text-left py-4 px-4 text-indigo-900 dark:text-gray-100 font-semibold">Duration</th>
               <th className="text-left py-4 px-4 text-indigo-900 dark:text-gray-100 font-semibold">Passages</th>
               <th className="text-left py-4 px-4 text-indigo-900 dark:text-gray-100 font-semibold">Questions</th>
@@ -104,7 +115,7 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
           <tbody>
             {exams.length === 0 ? (
               <tr>
-                <td colSpan={7} className="py-8 text-center text-gray-500 dark:text-gray-400">
+                <td colSpan={8} className="py-8 text-center text-gray-500 dark:text-gray-400">
                   No exam sets found. Create one to get started!
                 </td>
               </tr>
@@ -127,6 +138,7 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
                        exam.skillType === 'speaking' ? 'Speaking' : 'Writing'}
                     </span>
                   </td>
+                  <td className="py-4 px-4">{statusBadge(exam.status)}</td>
                   <td className="py-4 px-4 text-gray-700 dark:text-gray-300">{exam.totalDurationMinutes} mins</td>
                   <td className="py-4 px-4 text-gray-700 dark:text-gray-300">{exam.passages.length}</td>
                   <td className="py-4 px-4 text-gray-700 dark:text-gray-300">{exam.totalQuestions}</td>

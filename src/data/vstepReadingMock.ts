@@ -58,6 +58,8 @@ export interface VstepExamSet {
   passages: Passage[];
   writingTasks?: WritingTask[];
   createdAt: string;
+  /** Trạng thái công khai của đề thi: 'public' ai cũng làm được (kể cả guest), 'private' chỉ dành cho học viên được giao */
+  status?: 'public' | 'private';
 }
 
 export interface WritingSubmission {

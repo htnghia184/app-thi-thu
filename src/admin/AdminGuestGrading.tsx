@@ -1,0 +1,634 @@
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
+import {
+  Loader2, RefreshCw, Search, Filter, User, Phone, Mail, FileText,
+  ClipboardList, CheckCircle2, Clock, GraduationCap, X, Save,
+  AlertCircle, Mic, PenLine, TrendingUp, ShieldCheck,
+} from 'lucide-react';
+import {
+  fetchGuestLeadsForGrading, fetchTeachers, assignTeacherToLead,
+  submitGuestLeadGrade,
+} from '../lib/supabaseService';
+
+interface AdminGuestGradingProps {
+  userId: string;
+  viewMode: 'admin' | 'teacher';
+}
+
+type StatusFilter = 'all' | 'unassigned' | 'assigned' | 'graded';
+type SkillFilter = 'all' | 'writing' | 'speaking' | 'reading' | 'listening';
+
+export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, viewMode }) => {
+  const isAdmin = viewMode === 'admin';
+
+  const [leads, setLeads] = useState<any[]>([]);
+  const [teachers, setTeachers] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState('');
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
+  const [skillFilter, setSkillFilter] = useState<SkillFilter>('all');
+  const [selectedLead, setSelectedLead] = useState<any>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchGuestLeadsForGrading({
+        teacherId: isAdmin ? undefined : userId,
+      });
+      setLeads(data || []);
+      if (isAdmin) {
+        const t = await fetchTeachers();
+        setTeachers(t || []);
+      }
+    } catch (err: any) {
+      console.error('Failed to load guest leads for grading:', err);
+      setError('Không thể tải danh sách bài cần chấm. Kiểm tra đã chạy migration 007_guest_grading.sql.');
+    } finally {
+      setLoading(false);
+    }
+  }, [isAdmin, userId]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const filtered = useMemo(() => {
+    return leads.filter(l => {
+      if (statusFilter !== 'all' && l.grading_status !== statusFilter) return false;
+      if (skillFilter !== 'all' && (l.skill_type || '') !== skillFilter) return false;
+      if (searchTerm) {
+        const term = searchTerm.toLowerCase();
+        const haystack = `${l.full_name || ''} ${l.phone || ''} ${l.email || ''} ${l.exam_title || ''}`.toLowerCase();
+        if (!haystack.includes(term)) return false;
+      }
+      return true;
+    });
+  }, [leads, statusFilter, skillFilter, searchTerm]);
+
+  const stats = useMemo(() => ({
+    total: leads.length,
+    unassigned: leads.filter(l => l.grading_status === 'unassigned').length,
+    assigned: leads.filter(l => l.grading_status === 'assigned').length,
+    graded: leads.filter(l => l.grading_status === 'graded').length,
+  }), [leads]);
+
+  const formatDate = (d?: string) => {
+    if (!d) return '-';
+    return new Date(d).toLocaleString('vi-VN', {
+      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+    });
+  };
+
+  const statusBadge = (status?: string) => {
+    const map: Record<string, string> = {
+      unassigned: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
+      assigned: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
+      graded: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+    };
+    const label: Record<string, string> = {
+      unassigned: 'Chưa gán',
+      assigned: 'Đã gán',
+      graded: 'Đã chấm',
+    };
+    return (
+      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${map[status || 'unassigned']}`}>
+        {label[status || 'unassigned']}
+      </span>
+    );
+  };
+
+  const skillBadge = (skill?: string) => {
+    const map: Record<string, string> = {
+      reading: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+      listening: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+      writing: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+      speaking: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
+    };
+    return (
+      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${map[skill || 'reading']}`}>
+        {skill || '-'}
+      </span>
+    );
+  };
+
+  const handleAssign = async (leadId: string, teacherId: string) => {
+    setSaving(true);
+    try {
+      await assignTeacherToLead(leadId, teacherId || null);
+      await load();
+    } catch (err: any) {
+      alert('Không thể gán giáo viên: ' + (err.message || err));
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  // ---------------- Render ----------------
+  return (
+    <div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+        <div>
+          <h2 className="text-2xl font-bold text-indigo-900 dark:text-gray-100">
+            {isAdmin ? 'Chấm bài Guest' : 'Bài được giao chấm'}
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            {isAdmin
+              ? 'Gán giáo viên chấm bài viết / nói cho guest và theo dõi tiến độ.'
+              : 'Các bài thi thử của guest được admin giao cho bạn chấm.'}
+          </p>
+        </div>
+        <button
+          onClick={load}
+          disabled={loading || saving}
+          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-all text-sm"
+        >
+          <RefreshCw size={16} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {error && (
+        <div className="p-4 mb-4 rounded-lg text-sm font-medium bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+          {error}
+        </div>
+      )}
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5">
+          <div className="text-2xl font-bold text-indigo-600">{stats.total}</div>
+          <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Tổng bài</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5">
+          <div className="text-2xl font-bold text-gray-500 dark:text-gray-400">{stats.unassigned}</div>
+          <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Chưa gán</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5">
+          <div className="text-2xl font-bold text-amber-600">{stats.assigned}</div>
+          <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Đang chờ chấm</div>
+        </div>
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5">
+          <div className="text-2xl font-bold text-emerald-600">{stats.graded}</div>
+          <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Đã chấm</div>
+        </div>
+      </div>
+
+      {/* Filters */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-4 mb-6 flex flex-col lg:flex-row gap-3 items-start lg:items-center justify-between">
+        <div className="relative flex-1 max-w-md w-full">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            type="text"
+            value={searchTerm}
+            onChange={e => setSearchTerm(e.target.value)}
+            placeholder="Tìm theo tên, sđt, email, đề thi..."
+            className="w-full pl-9 pr-4 py-2 border border-gray-200 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-300 dark:bg-gray-700 dark:text-gray-200 outline-none transition-all text-sm"
+          />
+        </div>
+        <div className="flex items-center gap-2 flex-wrap">
+          <Filter size={16} className="text-gray-400 hidden sm:block" />
+          {/* Skill filter */}
+          <select
+            value={skillFilter}
+            onChange={e => setSkillFilter(e.target.value as SkillFilter)}
+            className="px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-200 outline-none capitalize"
+          >
+            <option value="all">Tất cả kỹ năng</option>
+            <option value="writing">Writing</option>
+            <option value="speaking">Speaking</option>
+            <option value="reading">Reading</option>
+            <option value="listening">Listening</option>
+          </select>
+          {/* Status filter */}
+          <div className="flex bg-gray-100 dark:bg-gray-700 rounded-lg p-1">
+            {(['all', 'unassigned', 'assigned', 'graded'] as StatusFilter[]).map(s => (
+              <button
+                key={s}
+                onClick={() => setStatusFilter(s)}
+                className={`px-3 py-1.5 rounded-md text-xs font-medium transition-all ${
+                  statusFilter === s
+                    ? 'bg-white dark:bg-gray-800 text-indigo-700 dark:text-indigo-400 shadow-sm'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-gray-700'
+                }`}
+              >
+                {s === 'all' ? 'Tất cả' : s === 'unassigned' ? 'Chưa gán' : s === 'assigned' ? 'Đã gán' : 'Đã chấm'}
+              </button>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 flex justify-center">
+          <Loader2 size={28} className="animate-spin text-indigo-600" />
+        </div>
+      ) : filtered.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 text-center">
+          <ClipboardList size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">Không có bài nào phù hợp.</p>
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+          <div className="overflow-x-auto">
+            <table className="w-full min-w-[1100px]">
+              <thead>
+                <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
+                  <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">#</th>
+                  <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Khách hàng</th>
+                  <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Đề thi</th>
+                  <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Kỹ năng</th>
+                  <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Trạng thái</th>
+                  {isAdmin && (
+                    <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Giáo viên chấm</th>
+                  )}
+                  <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Điểm</th>
+                  <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Ngày</th>
+                  <th className="text-right py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Hành động</th>
+                </tr>
+              </thead>
+              <tbody>
+                {filtered.map((lead, index) => (
+                  <tr key={lead.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                    <td className="py-3 px-4 text-gray-500 dark:text-gray-400 text-sm">{index + 1}</td>
+                    <td className="py-3 px-4">
+                      <div className="flex items-center gap-2">
+                        <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 font-bold text-xs flex-shrink-0">
+                          {(lead.full_name || '?').charAt(0).toUpperCase()}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{lead.full_name}</div>
+                          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                            <Phone size={10} /> {lead.phone}
+                          </div>
+                        </div>
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">
+                      <div className="text-sm text-gray-700 dark:text-gray-300 max-w-[180px] truncate flex items-center gap-1.5">
+                        <FileText size={13} className="text-gray-400 flex-shrink-0" />
+                        {lead.exam_title || '-'}
+                      </div>
+                    </td>
+                    <td className="py-3 px-4">{skillBadge(lead.skill_type)}</td>
+                    <td className="py-3 px-4">{statusBadge(lead.grading_status)}</td>
+                    {isAdmin && (
+                      <td className="py-3 px-4">
+                        <select
+                          value={lead.assigned_teacher_id || ''}
+                          disabled={saving}
+                          onChange={e => handleAssign(lead.id, e.target.value)}
+                          className="px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:bg-gray-700 dark:text-gray-200 outline-none max-w-[170px]"
+                        >
+                          <option value="">— Chưa gán —</option>
+                          {teachers.map(t => (
+                            <option key={t.id} value={t.id}>{t.full_name || t.email}</option>
+                          ))}
+                        </select>
+                      </td>
+                    )}
+                    <td className="py-3 px-4">
+                      {lead.grade_score != null ? (
+                        <div className="flex items-center gap-1.5">
+                          <TrendingUp size={14} className="text-emerald-500" />
+                          <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{lead.grade_score}</span>
+                          <span className="text-xs text-gray-400">/10</span>
+                        </div>
+                      ) : lead.skill_type === 'reading' || lead.skill_type === 'listening' ? (
+                        <div className="flex items-center gap-1.5">
+                          <TrendingUp size={14} className="text-indigo-500" />
+                          <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{lead.score_vstep ?? '-'}</span>
+                          <span className="text-xs text-gray-400">(auto)</span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-gray-400">-</span>
+                      )}
+                    </td>
+                    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(lead.created_at)}</td>
+                    <td className="py-3 px-4 text-right">
+                      <button
+                        onClick={() => setSelectedLead(lead)}
+                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                          lead.grading_status === 'graded'
+                            ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
+                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                        }`}
+                      >
+                        {lead.grading_status === 'graded' ? 'Xem / Sửa' : 'Chấm bài'}
+                      </button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {selectedLead && (
+        <GradeModal
+          lead={selectedLead}
+          isAdmin={isAdmin}
+          teachers={teachers}
+          saving={saving}
+          onClose={() => setSelectedLead(null)}
+          onAssign={handleAssign}
+          onSaveGrade={async (score, feedback) => {
+            setSaving(true);
+            try {
+              await submitGuestLeadGrade(selectedLead.id, score, feedback, userId);
+              await load();
+              setSelectedLead(null);
+            } catch (err: any) {
+              alert('Không thể lưu điểm: ' + (err.message || err));
+            } finally {
+              setSaving(false);
+            }
+          }}
+        />
+      )}
+    </div>
+  );
+};
+
+// ==================== Grade Modal ====================
+
+interface GradeModalProps {
+  lead: any;
+  isAdmin: boolean;
+  teachers: any[];
+  saving: boolean;
+  onClose: () => void;
+  onAssign: (leadId: string, teacherId: string) => void;
+  onSaveGrade: (score: number, feedback: string) => void;
+}
+
+const GradeModal: React.FC<GradeModalProps> = ({
+  lead, isAdmin, teachers, saving, onClose, onAssign, onSaveGrade,
+}) => {
+  const [score, setScore] = useState<string>(lead.grade_score != null ? String(lead.grade_score) : '');
+  const [feedback, setFeedback] = useState<string>(lead.grade_feedback || '');
+  const [error, setError] = useState('');
+
+  const isWriting = lead.skill_type === 'writing';
+  const isSpeaking = lead.skill_type === 'speaking';
+  const isAutoScored = lead.skill_type === 'reading' || lead.skill_type === 'listening';
+
+  const writingAnswers: Record<string, string> = useMemo(() => {
+    const raw = lead.writing_answers;
+    if (!raw || typeof raw !== 'object') return {};
+    const entries: [string, string][] = Object.entries(raw)
+      .filter(([, v]) => typeof v === 'string' && v.trim().length > 0)
+      .map(([k, v]) => [k, String(v)]);
+    entries.sort(([a], [b]) => Number(a) - Number(b));
+    return Object.fromEntries(entries);
+  }, [lead.writing_answers]);
+
+  const wordCount = (text: string) => text.trim() ? text.trim().split(/\s+/).length : 0;
+
+  const handleSubmit = () => {
+    const num = parseFloat(score);
+    if (score === '' || isNaN(num) || num < 0 || num > 10) {
+      setError('Điểm phải từ 0 đến 10 (có thể là số thập phân như 6.5).');
+      return;
+    }
+    setError('');
+    onSaveGrade(Math.round(num * 10) / 10, feedback.trim());
+  };
+
+  const showGradeForm = !isAutoScored || lead.grade_score != null;
+  return (
+    <div className="fixed inset-0 z-50 bg-black/50 flex items-center justify-center p-4" onClick={onClose}>
+      <div
+        className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-3xl max-h-[90vh] flex flex-col"
+        onClick={e => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-start justify-between px-6 py-4 border-b border-gray-200 dark:border-gray-700">
+          <div>
+            <h3 className="text-lg font-bold text-indigo-900 dark:text-gray-100 flex items-center gap-2">
+              <GraduationCap size={20} className="text-indigo-500" />
+              Chấm bài — {lead.full_name}
+            </h3>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+              {lead.exam_title || 'Không rõ đề'} · {skillBadge(lead.skill_type)}
+            </p>
+          </div>
+          <button onClick={onClose} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors">
+            <X size={22} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {/* Contact info */}
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div className="flex items-center gap-2 text-sm font-semibold text-gray-700 dark:text-gray-300">
+                <User size={14} className="text-indigo-500" /> {lead.full_name}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <Phone size={12} className="text-emerald-500" /> {lead.phone}
+              </div>
+              {lead.email && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <Mail size={12} className="text-blue-500" /> {lead.email}
+                </div>
+              )}
+            </div>
+            <div className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg">
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400">
+                <Clock size={14} className="text-purple-500" /> {formatDateTime(lead.created_at)}
+              </div>
+              <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                <ClipboardList size={14} className="text-amber-500" />
+                {statusLabel(lead.grading_status)}
+              </div>
+              {isAdmin && (
+                <div className="flex items-center gap-2 text-sm text-gray-500 dark:text-gray-400 mt-1">
+                  <ShieldCheck size={14} className="text-rose-500" /> Passcode: <span className="font-mono font-semibold">{lead.passcode || '-'}</span>
+                </div>
+              )}
+            </div>
+          </div>
+
+          {/* Auto score (reading/listening) */}
+          {isAutoScored && (
+            <div className="p-4 rounded-xl bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800">
+              <div className="flex items-center gap-2 text-sm font-semibold text-indigo-800 dark:text-indigo-200">
+                <TrendingUp size={16} /> Kết quả tự chấm (hệ thống)
+              </div>
+              <div className="mt-2 flex items-center gap-4">
+                <span className="text-2xl font-bold text-indigo-700 dark:text-indigo-300">
+                  {lead.score_vstep ?? '-'} <span className="text-sm font-normal text-indigo-500">/10</span>
+                </span>
+                <span className="text-sm text-indigo-700 dark:text-indigo-300">
+                  {lead.score_raw ?? 0}/{lead.total_questions ?? 0} câu đúng
+                </span>
+                <span className="text-sm text-indigo-700 dark:text-indigo-300">
+                  {formatTime(lead.time_spent_seconds)}
+                </span>
+              </div>
+            </div>
+          )}
+
+          {/* Writing content */}
+          {isWriting && (
+            <div>
+              <h4 className="text-sm font-bold text-indigo-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                <PenLine size={16} className="text-emerald-500" /> Bài viết của thí sinh
+              </h4>
+              {Object.keys(writingAnswers).length === 0 ? (
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 text-amber-700 dark:text-amber-200 text-sm flex items-start gap-2">
+                  <AlertCircle size={16} className="flex-shrink-0 mt-0.5" />
+                  Không có nội dung bài viết được lưu cho lead này.
+                </div>
+              ) : (
+                <div className="space-y-3">
+                  {Object.entries(writingAnswers).map(([taskId, text]) => (
+                    <div key={taskId} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-xs font-bold text-gray-600 dark:text-gray-300 uppercase">Task {taskId}</span>
+                        <span className="text-xs text-gray-400">{wordCount(text)} từ</span>
+                      </div>
+                      <p className="text-sm text-gray-800 dark:text-gray-200 whitespace-pre-wrap leading-relaxed max-h-64 overflow-y-auto">{text}</p>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Speaking note */}
+          {isSpeaking && (
+            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
+              <Mic size={18} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+              <div className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
+                <span className="font-semibold">Speaking của guest chưa được lưu file ghi âm.</span>
+                <br />
+                Bạn vẫn có thể ghi nhận điểm & feedback (sẽ gửi qua Zalo) nếu có thông tin thêm từ buổi tư vấn.
+              </div>
+            </div>
+          )}
+
+          {/* Grade form */}
+          {showGradeForm && (
+            <div className="p-4 rounded-xl border border-gray-200 dark:border-gray-700">
+              <h4 className="text-sm font-bold text-indigo-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                <CheckCircle2 size={16} className="text-emerald-500" />
+                {lead.grade_score != null ? 'Cập nhật điểm' : 'Chấm điểm'}
+              </h4>
+
+              {isAdmin && (
+                <div className="mb-4">
+                  <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">
+                    Gán giáo viên chấm
+                  </label>
+                  <select
+                    value={lead.assigned_teacher_id || ''}
+                    disabled={saving}
+                    onChange={e => onAssign(lead.id, e.target.value)}
+                    className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-200 outline-none"
+                  >
+                    <option value="">— Chưa gán —</option>
+                    {teachers.map(t => (
+                      <option key={t.id} value={t.id}>{t.full_name || t.email}</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+
+              {lead.grade_score != null && (
+                <div className="mb-4 p-3 rounded-lg bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+                  <div className="text-xs text-emerald-700 dark:text-emerald-300 font-semibold">
+                    Đã chấm bởi {lead.grader_name || '—'} lúc {formatDateTime(lead.graded_at)}
+                  </div>
+                </div>
+              )}
+
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">
+                  Điểm (0 – 10) <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="number"
+                  min={0}
+                  max={10}
+                  step={0.5}
+                  value={score}
+                  onChange={e => setScore(e.target.value)}
+                  placeholder="VD: 6.5"
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-300"
+                />
+              </div>
+
+              <div className="mb-4">
+                <label className="block text-xs font-semibold text-gray-600 dark:text-gray-300 mb-1.5">
+                  Nhận xét (feedback) — gửi cho học viên qua Zalo
+                </label>
+                <textarea
+                  value={feedback}
+                  onChange={e => setFeedback(e.target.value)}
+                  rows={4}
+                  placeholder="Nhận xét chi tiết về bài làm, điểm mạnh, điểm cần cải thiện..."
+                  className="w-full px-3 py-2 border border-gray-200 dark:border-gray-600 rounded-lg text-sm dark:bg-gray-700 dark:text-gray-200 outline-none focus:ring-2 focus:ring-indigo-300 resize-y"
+                />
+              </div>
+
+              {error && (
+                <div className="mb-4 p-3 rounded-lg text-sm font-medium bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+                  {error}
+                </div>
+              )}
+
+              <button
+                onClick={handleSubmit}
+                disabled={saving}
+                className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-emerald-600 hover:to-emerald-700 disabled:opacity-50 transition-all flex items-center justify-center gap-2"
+              >
+                {saving ? <Loader2 size={16} className="animate-spin" /> : <Save size={16} />}
+                {saving ? 'Đang lưu...' : lead.grade_score != null ? 'Cập nhật điểm' : 'Lưu điểm'}
+              </button>
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+};
+
+// ==================== helpers ====================
+
+const statusLabel = (status?: string) => {
+  const map: Record<string, string> = {
+    unassigned: 'Chưa gán', assigned: 'Đã gán', graded: 'Đã chấm',
+  };
+  return map[status || 'unassigned'];
+};
+
+const skillBadge = (skill?: string) => {
+  const map: Record<string, string> = {
+    reading: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
+    listening: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
+    writing: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
+    speaking: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
+  };
+  return (
+    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${map[skill || 'reading']}`}>
+      {skill || '-'}
+    </span>
+  );
+};
+
+const formatDateTime = (d?: string) => {
+  if (!d) return '-';
+  return new Date(d).toLocaleString('vi-VN', {
+    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
+  });
+};
+
+const formatTime = (s?: number | null) => {
+  if (!s && s !== 0) return '-';
+  const m = Math.floor(s / 60);
+  return `${m}m ${s % 60}s`;
+};

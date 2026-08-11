@@ -11,6 +11,7 @@ interface StudentDashboardProps {
   onViewProfile: () => void;
   onLogout: () => void;
   onSwitchToAdmin: () => void;
+  onLookupResult?: () => void;
   isDark: boolean;
   toggleDarkMode: () => void;
 }
@@ -99,6 +100,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   onViewProfile,
   onLogout,
   onSwitchToAdmin,
+  onLookupResult,
   isDark,
   toggleDarkMode,
 }) => {
@@ -109,6 +111,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [assignmentsLoading, setAssignmentsLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
+
+  // Guest: không có tài khoản — không cần gán lớp, chỉ làm các đề public
+  const isGuest = userRole === 'guest';
 
   interface NotificationItem {
     id: string;
@@ -181,6 +186,10 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   };
 
   useEffect(() => {
+    if (isGuest) {
+      setLoadingResults(false);
+      return;
+    }
     const loadResults = async () => {
       try {
         const data = await fetchUserExamResults(user.id);
@@ -192,9 +201,13 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       }
     };
     loadResults();
-  }, [user.id]);
+  }, [user.id, isGuest]);
 
   useEffect(() => {
+    if (isGuest) {
+      setAssignmentsLoading(false);
+      return;
+    }
     const loadAssignments = async () => {
       try {
         const data = await fetchStudentAssignments(user.id);
@@ -206,7 +219,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       }
     };
     loadAssignments();
-  }, [user.id]);
+  }, [user.id, isGuest]);
 
   // Join each assignment with its exam — mỗi assignment hiển thị như một bài riêng,
   // không gộp theo exam_id (cùng 1 đề được assign nhiều lần vẫn hiện đủ).
@@ -216,13 +229,18 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
     if (exam) assignmentCards.push({ assignment: a, exam });
   });
 
-  // Filter by skill (chỉ hiển thị assignment khi đã đăng nhập)
-  const skillFilteredCards = skillFilter === 'all'
-    ? assignmentCards
-    : assignmentCards.filter(({ exam }) => exam.skillType === skillFilter);
-  const filteredCards = user ? skillFilteredCards : assignmentCards;
+  // Guest: hiển thị trực tiếp các đề public (không cần được giao)
+  const availableCards: { assignment?: Assignment & { class_name?: string }; exam: VstepExamSet }[] = isGuest
+    ? exams.map(exam => ({ exam }))
+    : assignmentCards;
 
-  const hasNoClasses = user && !assignmentsLoading && assignments.length === 0;
+  // Filter by skill
+  const skillFilteredCards = skillFilter === 'all'
+    ? availableCards
+    : availableCards.filter(({ exam }) => exam.skillType === skillFilter);
+  const filteredCards = skillFilteredCards;
+
+  const hasNoClasses = !isGuest && !assignmentsLoading && assignments.length === 0;
 
   const formatTime = (s: number) => {
     const m = Math.floor(s / 60);
@@ -285,6 +303,9 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             <div className="hidden md:flex items-center gap-2 text-indigo-200 text-sm">
               <User size={16} />
               <span>{user.email}</span>
+              {isGuest && (
+                <span className="px-2 py-0.5 bg-emerald-500/20 text-emerald-300 text-xs font-semibold rounded-full">Guest</span>
+              )}
               {userRole === 'admin' && (
                 <span className="px-2 py-0.5 bg-amber-500/20 text-amber-300 text-xs font-semibold rounded-full">Admin</span>
               )}
@@ -296,7 +317,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
               </button>
             )}
             {/* Notification Bell */}
-            {!assignmentsLoading && (
+            {!isGuest && !assignmentsLoading && (
               <div className="relative">
                 <button
                   onClick={() => setShowNotifications(!showNotifications)}
@@ -391,10 +412,12 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             }} className="flex items-center gap-1 text-indigo-200 hover:text-white text-xs md:text-sm transition-colors" title={isDark ? 'Light Mode' : 'Dark Mode'}>
               {isDark ? <Sun size={16} /> : <Moon size={16} />}
             </button>
-            <button onClick={onViewProfile} className="flex items-center gap-1 text-indigo-200 hover:text-white text-xs md:text-sm transition-colors" title="Profile">
-              <User size={16} />
-              <span className="hidden md:inline">Profile</span>
-            </button>
+            {!isGuest && (
+              <button onClick={onViewProfile} className="flex items-center gap-1 text-indigo-200 hover:text-white text-xs md:text-sm transition-colors" title="Profile">
+                <User size={16} />
+                <span className="hidden md:inline">Profile</span>
+              </button>
+            )}
             <button onClick={onLogout} className="flex items-center gap-1 text-indigo-200 hover:text-white text-xs md:text-sm transition-colors" title="Logout">
               <LogOut size={16} />
               <span className="hidden md:inline">Logout</span>
@@ -408,18 +431,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 mb-8">
           <div className="md:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-6 md:p-8">
             <h2 className="text-2xl font-bold text-indigo-900 dark:text-gray-100 mb-2">
-              Welcome back!
+              {isGuest ? 'Welcome, Guest!' : 'Welcome back!'}
             </h2>
             <p className="text-gray-600 dark:text-gray-400">
-              {recentResults.length > 0
-                ? `You've completed ${recentResults.length} test${recentResults.length > 1 ? 's' : ''}. Keep practicing to improve your score!`
-                : 'Ready to practice? Start a new test below.'}
+              {isGuest
+                ? 'You are browsing as a guest. Try the public tests for free — create an account to unlock assigned exams.'
+                : recentResults.length > 0
+                  ? `You've completed ${recentResults.length} test${recentResults.length > 1 ? 's' : ''}. Keep practicing to improve your score!`
+                  : 'Ready to practice? Start a new test below.'}
             </p>
           </div>
 
           <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-6 text-center">
             <div className="text-3xl font-bold text-indigo-600 dark:text-indigo-400 mb-1">
-              {assignmentsLoading ? '...' : assignmentCards.length}
+              {assignmentsLoading ? '...' : (isGuest ? exams.length : assignmentCards.length)}
             </div>
             <div className="text-sm text-gray-600 dark:text-gray-400 flex items-center justify-center gap-1">
               <FileText size={14} /> Available Tests
@@ -446,8 +471,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           {(['all', 'reading', 'listening', 'writing', 'speaking'] as SkillFilter[]).map((filter) => {
             const isActive = skillFilter === filter;
             const countForFilter = filter === 'all'
-              ? (user ? assignmentCards.length : exams.length)
-              : (user ? assignmentCards.filter(({ exam }) => exam.skillType === filter).length : exams.filter(e => e.skillType === filter).length);
+              ? (isGuest ? exams.length : assignmentCards.length)
+              : (isGuest ? exams.filter(e => e.skillType === filter).length : assignmentCards.filter(({ exam }) => exam.skillType === filter).length);
             return (
               <button
                 key={filter}
@@ -493,7 +518,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                   const Icon = getExamIcon(exam.skillType);
                   const config = skillConfig[exam.skillType];
                   return (
-                    <div key={assignment.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-6 hover:shadow-xl dark:hover:shadow-gray-900/50 transition-shadow">
+                    <div key={assignment?.id || exam.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-6 hover:shadow-xl dark:hover:shadow-gray-900/50 transition-shadow">
                       <div className="flex flex-col md:flex-row md:items-start justify-between gap-3 md:gap-0">
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 md:gap-3 mb-2">
@@ -514,13 +539,20 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                             <span className="flex items-center gap-1"><BarChart3 size={12} className="md:size-[14px]" /> {exam.totalQuestions} questions</span>
                           </div>
                           <div className="mt-2 md:mt-3 flex items-center gap-2 md:gap-3 flex-wrap">
-                            {getDeadlineBadge(assignment.deadline)}
-                            <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
-                              <Calendar size={12} /> Deadline: {formatDeadline(assignment.deadline)}
-                            </span>
-                            {assignment.class_name && (
+                            {assignment && getDeadlineBadge(assignment.deadline)}
+                            {assignment && (
+                              <span className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1">
+                                <Calendar size={12} /> Deadline: {formatDeadline(assignment.deadline)}
+                              </span>
+                            )}
+                            {assignment?.class_name && (
                               <span className="text-xs bg-indigo-50 dark:bg-indigo-900/30 text-indigo-600 dark:text-indigo-400 px-2 py-1 rounded-full font-medium">
                                 {assignment.class_name}
+                              </span>
+                            )}
+                            {isGuest && (
+                              <span className="text-xs bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400 px-2 py-1 rounded-full font-medium">
+                                Public Test
                               </span>
                             )}
                           </div>
@@ -540,6 +572,25 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
           </div>
 
           {/* Recent Results */}
+          {isGuest ? (
+            <div>
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-6 text-center">
+                <div className="text-4xl mb-3">👋</div>
+                <h3 className="text-base font-bold text-gray-800 dark:text-gray-200 mb-2">Guest Mode</h3>
+                <p className="text-sm text-gray-500 dark:text-gray-400 leading-relaxed mb-5">
+                  You are taking tests as a guest. Your results are not saved. Sign in with an account assigned by your teacher to keep your exam history.
+                </p>
+                {onLookupResult && (
+                  <button
+                    onClick={onLookupResult}
+                    className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all text-sm"
+                  >
+                    Tra cứu kết quả thi thử
+                  </button>
+                )}
+              </div>
+            </div>
+          ) : (
           <div>
             <div className="flex items-center justify-between mb-5">
               <h3 className="text-xl font-bold text-indigo-900 dark:text-gray-100 flex items-center gap-2">
@@ -583,6 +634,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
             )}
           </div>
           </div>
+          )}
         </div>
       </main>
     </div>

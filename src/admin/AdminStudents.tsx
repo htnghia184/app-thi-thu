@@ -1,6 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { fetchAllStudentsWithStats, fetchStudentDetailResults, StudentWithStats } from '../lib/supabaseService';
-import { Users, BarChart3, Trophy, Calendar, Clock, ArrowLeft, Loader2, Mail, BookOpen } from 'lucide-react';
+import React, { useEffect, useState, useCallback } from 'react';
+import { fetchAllStudentsWithStats, fetchStudentDetailResults, StudentWithStats, adminDeleteUser } from '../lib/supabaseService';
+import { Users, BarChart3, Trophy, Calendar, Clock, ArrowLeft, Loader2, Mail, BookOpen, UserPlus, Trash2 } from 'lucide-react';
+import { CreateUserModal } from './CreateUserModal';
 
 interface AdminStudentsProps {
   onBack: () => void;
@@ -16,20 +17,34 @@ export const AdminStudents: React.FC<AdminStudentsExtendedProps> = ({ onBack: _o
   const [selectedStudentId, setSelectedStudentId] = useState<string | null>(null);
   const [studentResults, setStudentResults] = useState<any[]>([]);
   const [resultsLoading, setResultsLoading] = useState(false);
+  const [showCreate, setShowCreate] = useState(false);
+
+  const isAdmin = !teacherId;
+
+  const load = useCallback(async () => {
+    try {
+      const data = await fetchAllStudentsWithStats(teacherId);
+      setStudents(data);
+    } catch (err) {
+      console.error('Failed to load students:', err);
+    } finally {
+      setLoading(false);
+    }
+  }, [teacherId]);
 
   useEffect(() => {
-    const load = async () => {
-      try {
-        const data = await fetchAllStudentsWithStats(teacherId);
-        setStudents(data);
-      } catch (err) {
-        console.error('Failed to load students:', err);
-      } finally {
-        setLoading(false);
-      }
-    };
     load();
-  }, [teacherId]);
+  }, [load]);
+
+  const handleDelete = async (student: StudentWithStats) => {
+    if (!window.confirm(`Xóa tài khoản học viên "${student.full_name || student.email}"?\n\nToàn bộ kết quả làm bài của học viên cũng sẽ bị xóa.`)) return;
+    try {
+      await adminDeleteUser(student.id);
+      await load();
+    } catch (err: any) {
+      alert('Không thể xóa học viên: ' + (err?.message || err));
+    }
+  };
 
   const handleViewStudent = async (studentId: string) => {
     setSelectedStudentId(studentId);
@@ -131,6 +146,18 @@ export const AdminStudents: React.FC<AdminStudentsExtendedProps> = ({ onBack: _o
 
   return (
     <div>
+      {isAdmin && (
+        <div className="flex justify-end mb-6">
+          <button
+            onClick={() => setShowCreate(true)}
+            className="flex items-center gap-2 px-4 py-2 bg-emerald-600 text-white rounded-lg font-semibold hover:bg-emerald-700 transition-all text-sm shadow-lg shadow-emerald-600/20"
+          >
+            <UserPlus size={16} />
+            Tạo tài khoản học viên
+          </button>
+        </div>
+      )}
+
       {/* Class Stats */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-8">
         <div className="bg-white rounded-xl shadow-lg p-6">
@@ -204,9 +231,20 @@ export const AdminStudents: React.FC<AdminStudentsExtendedProps> = ({ onBack: _o
                     {s.last_exam_date ? formatDate(s.last_exam_date) : '-'}
                   </td>
                   <td className="py-4 px-6 text-right">
-                    <button onClick={() => handleViewStudent(s.id)} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium">
-                      View Results
-                    </button>
+                    <div className="flex items-center justify-end gap-2">
+                      <button onClick={() => handleViewStudent(s.id)} className="px-4 py-2 bg-indigo-100 text-indigo-700 rounded-lg hover:bg-indigo-200 transition-colors text-sm font-medium">
+                        View Results
+                      </button>
+                      {isAdmin && (
+                        <button
+                          onClick={() => handleDelete(s)}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 transition-colors"
+                          title="Xóa học viên"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      )}
+                    </div>
                   </td>
                 </tr>
               ))
@@ -214,6 +252,17 @@ export const AdminStudents: React.FC<AdminStudentsExtendedProps> = ({ onBack: _o
           </tbody>
         </table>
       </div>
+
+      {showCreate && (
+        <CreateUserModal
+          role="student"
+          onClose={() => setShowCreate(false)}
+          onCreated={() => {
+            setShowCreate(false);
+            load();
+          }}
+        />
+      )}
     </div>
   );
 };

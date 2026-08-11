@@ -40,17 +40,9 @@ export async function signOut() {
 // ==================== Exams CRUD ====================
 
 /**
- * Fetch all exam sets (with passages and questions nested)
+ * Hydrate raw exam rows (kèm passages + questions) thành VstepExamSet[]
  */
-export async function fetchExams(): Promise<VstepExamSet[]> {
-  const { data: examsData, error: examsError } = await supabase
-    .from('exams')
-    .select('*')
-    .order('created_at', { ascending: false });
-
-  if (examsError) throw examsError;
-  if (!examsData) return [];
-
+async function hydrateExams(examsData: any[]): Promise<VstepExamSet[]> {
   const exams: VstepExamSet[] = [];
 
   for (const examRow of examsData) {
@@ -116,10 +108,42 @@ export async function fetchExams(): Promise<VstepExamSet[]> {
       passages,
       writingTasks,
       createdAt: examRow.created_at,
+      status: examRow.status || 'private',
     });
   }
 
   return exams;
+}
+
+/**
+ * Fetch all exam sets (with passages and questions nested)
+ */
+export async function fetchExams(): Promise<VstepExamSet[]> {
+  const { data: examsData, error: examsError } = await supabase
+    .from('exams')
+    .select('*')
+    .order('created_at', { ascending: false });
+
+  if (examsError) throw examsError;
+  if (!examsData) return [];
+
+  return hydrateExams(examsData);
+}
+
+/**
+ * Fetch các đề thi công khai (status = 'public') — dùng cho guest/thi thử
+ */
+export async function fetchPublicExams(): Promise<VstepExamSet[]> {
+  const { data: examsData, error: examsError } = await supabase
+    .from('exams')
+    .select('*')
+    .eq('status', 'public')
+    .order('created_at', { ascending: false });
+
+  if (examsError) throw examsError;
+  if (!examsData) return [];
+
+  return hydrateExams(examsData);
 }
 
 /**
@@ -197,6 +221,7 @@ export async function fetchExamById(examId: string): Promise<VstepExamSet | null
     passages,
     writingTasks,
     createdAt: examRow.created_at,
+    status: examRow.status || 'private',
   };
 }
 
@@ -210,6 +235,8 @@ export async function upsertExam(exam: VstepExamSet, userId?: string): Promise<v
     description: exam.description,
     duration_minutes: exam.totalDurationMinutes,
     skill_type: exam.skillType,
+    status: exam.status || 'private',
+    is_published: (exam.status || 'private') === 'public',
   };
 
   if (exam.id && !exam.id.startsWith('new-')) {
@@ -1622,4 +1649,386 @@ export async function aiGradeWriting(
       criteriaScores: { grammar: 0, vocabulary: 0, coherence: 0, task_achievement: 0 },
     };
   }
+}
+
+// ============================================================
+// Guest Leads — dữ liệu thi thử miễn phí để tìm potential lead
+// ============================================================
+
+export interface GuestLeadResult {
+  exam_id?: string;
+  exam_title?: string;
+  skill_type?: string;
+  full_name: string;
+  phone: string;
+  email?: string;
+  passcode?: string;
+  score_raw?: number | null;
+  score_vstep?: number | null;
+  total_questions?: number | null;
+  time_spent_seconds?: number | null;
+  user_answers?: Record<string, number | null> | null;
+  writing_answers?: Record<string, string> | null;
+}
+
+/**
+ * Guest để lại thông tin liên hệ để nhận kết quả (chèn vào bảng exam_leads).
+ * RLS cho phép anon INSERT — không cần tài khoản.
+ */
+export async function submitGuestResult(payload: GuestLeadResult): Promise<void> {
+  const { error } = await supabase.from('exam_leads').insert(payload);
+  if (error) throw error;
+}
+
+/**
+ * Admin xem danh sách leads (người thi thử đã để lại thông tin).
+ * Kèm tên giáo viên được gán chấm + người chấm.
+ */
+export async function fetchExamLeads(): Promise<any[]> {
+  const { data, error } = await supabase
+    .from('exam_leads')
+    .select(`
+      *,
+      assigned_teacher:assigned_teacher_id ( id, email, full_name ),
+      grader:graded_by ( id, email, full_name )
+    `)
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+
+  return (data || []).map((l: any) => ({
+    ...l,
+    assigned_teacher_name: l.assigned_teacher?.full_name || l.assigned_teacher?.email || null,
+    grader_name: l.grader?.full_name || l.grader?.email || null,
+  }));
+}
+
+/**
+ * Sinh passcode ngẫu nhiên 8 ký tự (không gồm ký tự dễ nhầm lẫn 0/O, 1/I).
+ * Hiển thị dạng "A7K3-9PL2".
+ */
+export function generatePasscode(): string {
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  const rand = new Uint32Array(8);
+  if (typeof crypto !== 'undefined' && crypto.getRandomValues) {
+    crypto.getRandomValues(rand);
+  } else {
+    for (let i = 0; i < 8; i++) rand[i] = Math.floor(Math.random() * 0xffffffff);
+  }
+  const code = Array.from(rand, (n) => chars[n % chars.length]).join('');
+  return `${code.slice(0, 4)}-${code.slice(4)}`;
+}
+
+/**
+ * Tra cứu kết quả thi thử của guest bằng sdt + passcode.
+ * Gọi hàm SECURITY DEFINER trên DB (get_guest_result) để anon được phép.
+ */
+export async function fetchGuestResult(phone: string, passcode: string): Promise<any | null> {
+  const { data, error } = await supabase.rpc('get_guest_result', {
+    p_phone: phone,
+    p_passcode: passcode,
+  });
+  if (error) throw error;
+  return (Array.isArray(data) && data.length > 0) ? data[0] : null;
+}
+
+// ============================================================
+// Guest Grading — gán giáo viên chấm bài cho guest leads
+// ============================================================
+
+export interface TeacherWithStats {
+  id: string;
+  email: string;
+  full_name: string;
+  classes_count: number;
+  students_count: number;
+  assigned_pending: number;
+  graded_count: number;
+}
+
+/**
+ * Danh sách giáo viên kèm thống kê:
+ * số lớp phụ trách, số học viên, số lead đang chờ chấm, số lead đã chấm.
+ */
+export async function fetchTeachersWithStats(): Promise<TeacherWithStats[]> {
+  const { data, error } = await supabase
+    .from('profiles')
+    .select('id, email, full_name')
+    .eq('role', 'teacher')
+    .order('full_name');
+
+  if (error) throw error;
+  const teachers = data || [];
+  if (teachers.length === 0) return [];
+
+  // class_teachers: teacher -> set(class_id)
+  const { data: ctData } = await supabase.from('class_teachers').select('teacher_id, class_id');
+  const teacherClasses = new Map<string, Set<string>>();
+  (ctData || []).forEach((r: any) => {
+    if (!teacherClasses.has(r.teacher_id)) teacherClasses.set(r.teacher_id, new Set());
+    teacherClasses.get(r.teacher_id)!.add(r.class_id);
+  });
+
+  // class_students: class_id -> set(student_id)
+  const { data: csData } = await supabase.from('class_students').select('class_id, student_id');
+  const classStudents = new Map<string, Set<string>>();
+  (csData || []).forEach((r: any) => {
+    if (!classStudents.has(r.class_id)) classStudents.set(r.class_id, new Set());
+    classStudents.get(r.class_id)!.add(r.student_id);
+  });
+
+  // exam_leads: trạng thái gán / chấm
+  const { data: leadsData } = await supabase
+    .from('exam_leads')
+    .select('assigned_teacher_id, grading_status, graded_by');
+
+  const leads = leadsData || [];
+
+  return teachers.map(t => {
+    const classIds = teacherClasses.get(t.id) || new Set<string>();
+    const studentIds = new Set<string>();
+    classIds.forEach(cid => {
+      (classStudents.get(cid) || new Set<string>()).forEach(sid => studentIds.add(sid));
+    });
+
+    const assignedPending = leads.filter(l =>
+      l.assigned_teacher_id === t.id && l.grading_status !== 'graded'
+    ).length;
+    const gradedCount = leads.filter(l =>
+      l.graded_by === t.id || (l.assigned_teacher_id === t.id && l.grading_status === 'graded')
+    ).length;
+
+    return {
+      id: t.id,
+      email: t.email || '',
+      full_name: t.full_name || '',
+      classes_count: classIds.size,
+      students_count: studentIds.size,
+      assigned_pending: assignedPending,
+      graded_count: gradedCount,
+    };
+  });
+}
+
+/**
+ * Danh sách lead cần chấm (writing/speaking...).
+ * - Admin: tất cả leads (không truyền teacherId)
+ * - Teacher: chỉ leads được gán cho mình hoặc mình đã chấm (truyền teacherId)
+ * Trả về kèm tên giáo viên được gán + người chấm.
+ */
+export async function fetchGuestLeadsForGrading(opts?: { teacherId?: string }): Promise<any[]> {
+  let query = supabase
+    .from('exam_leads')
+    .select(`
+      *,
+      assigned_teacher:assigned_teacher_id ( id, email, full_name ),
+      grader:graded_by ( id, email, full_name )
+    `)
+    .order('created_at', { ascending: false });
+
+  if (opts?.teacherId) {
+    query = query.or(`assigned_teacher_id.eq.${opts.teacherId},graded_by.eq.${opts.teacherId}`);
+  }
+
+  const { data, error } = await query;
+  if (error) throw error;
+
+  return (data || []).map((l: any) => ({
+    ...l,
+    assigned_teacher_name: l.assigned_teacher?.full_name || l.assigned_teacher?.email || null,
+    grader_name: l.grader?.full_name || l.grader?.email || null,
+  }));
+}
+
+/**
+ * Gán giáo viên chấm bài cho một lead (admin).
+ * Nếu teacherId = null → bỏ gán, về trạng thái unassigned.
+ */
+export async function assignTeacherToLead(leadId: string, teacherId: string | null): Promise<void> {
+  const updates = teacherId
+    ? { assigned_teacher_id: teacherId, grading_status: 'assigned' }
+    : { assigned_teacher_id: null, grading_status: 'unassigned' };
+
+  const { error } = await supabase
+    .from('exam_leads')
+    .update(updates)
+    .eq('id', leadId);
+
+  if (error) throw error;
+}
+
+/**
+ * Giáo viên (hoặc admin) chấm điểm xong một lead guest.
+ * Cập nhật điểm, feedback và chuyển trạng thái sang 'graded'.
+ */
+export async function submitGuestLeadGrade(
+  leadId: string,
+  score: number,
+  feedback: string,
+  graderId: string
+): Promise<void> {
+  const { error } = await supabase
+    .from('exam_leads')
+    .update({
+      grade_score: score,
+      grade_feedback: feedback,
+      graded_by: graderId,
+      graded_at: new Date().toISOString(),
+      grading_status: 'graded',
+    })
+    .eq('id', leadId);
+
+  if (error) throw error;
+}
+
+/**
+ * Thống kê tổng quan cho Admin Dashboard.
+ */
+export async function fetchAdminStats() {
+  const countAll = async (table: string) => {
+    const { count } = await supabase
+      .from(table as any)
+      .select('*', { count: 'exact', head: true });
+    return count || 0;
+  };
+
+  const countProfilesByRole = async (role: string) => {
+    const { count } = await supabase
+      .from('profiles')
+      .select('*', { count: 'exact', head: true })
+      .eq('role', role);
+    return count || 0;
+  };
+
+  const { count: leadsCount } = await supabase
+    .from('exam_leads')
+    .select('*', { count: 'exact', head: true });
+
+  const { count: pendingCount } = await supabase
+    .from('exam_leads')
+    .select('*', { count: 'exact', head: true })
+    .in('grading_status', ['unassigned', 'assigned']);
+
+  const { count: gradedCount } = await supabase
+    .from('exam_leads')
+    .select('*', { count: 'exact', head: true })
+    .eq('grading_status', 'graded');
+
+  const [exams, students, teachers, classes] = await Promise.all([
+    countAll('exams'),
+    countProfilesByRole('student'),
+    countProfilesByRole('teacher'),
+    countAll('classes'),
+  ]);
+
+  return {
+    exams,
+    students,
+    teachers,
+    classes,
+    leads: leadsCount || 0,
+    pending_grading: pendingCount || 0,
+    graded: gradedCount || 0,
+  };
+}
+
+// ============================================================
+// Admin user management — tạo / xóa tài khoản (migration 008)
+// ============================================================
+
+/**
+ * Tạo tài khoản student/teacher ngay từ app.
+ * Gọi hàm SECURITY DEFINER admin_create_user trên DB (chỉ admin được gọi).
+ */
+export async function adminCreateUser(
+  email: string,
+  password: string,
+  fullName: string,
+  role: 'student' | 'teacher'
+): Promise<string> {
+  const { data, error } = await supabase.rpc('admin_create_user', {
+    p_email: email,
+    p_password: password,
+    p_full_name: fullName,
+    p_role: role,
+  });
+  if (error) throw error;
+  return data as string;
+}
+
+/**
+ * Xóa tài khoản (admin). Cascade xuống profiles, exam_results, ...
+ */
+export async function adminDeleteUser(userId: string): Promise<void> {
+  const { error } = await supabase.rpc('admin_delete_user', { p_user_id: userId });
+  if (error) throw error;
+}
+
+// ============================================================
+// Admin database browser — xem / xóa / dọn dẹp các bảng
+// ============================================================
+
+export interface AdminTableInfo {
+  name: string;
+  label: string;
+  deletable: boolean;
+  note?: string;
+}
+
+/** Danh sách bảng có thể quản lý từ app (bỏ auth schema) */
+export const ADMIN_DB_TABLES: AdminTableInfo[] = [
+  { name: 'profiles', label: 'Hồ sơ người dùng', deletable: false, note: 'Xóa user bằng nút ở tab Teachers / Students' },
+  { name: 'exams', label: 'Đề thi', deletable: true },
+  { name: 'passages', label: 'Đoạn văn', deletable: true },
+  { name: 'questions', label: 'Câu hỏi', deletable: true },
+  { name: 'exam_results', label: 'Kết quả làm bài', deletable: true },
+  { name: 'exam_leads', label: 'Leads thi thử', deletable: true },
+  { name: 'classes', label: 'Lớp học', deletable: true },
+  { name: 'class_teachers', label: 'Giáo viên - Lớp', deletable: true },
+  { name: 'class_students', label: 'Học viên - Lớp', deletable: true },
+  { name: 'assignments', label: 'Bài tập (assignments)', deletable: true },
+  { name: 'writing_submissions', label: 'Bài nộp Writing', deletable: true },
+  { name: 'writing_grades', label: 'Điểm Writing', deletable: true },
+  { name: 'speaking_submissions', label: 'Bài nộp Speaking', deletable: true },
+  { name: 'speaking_grades', label: 'Điểm Speaking', deletable: true },
+];
+
+/** Đếm số dòng của tất cả bảng (dùng cho màn hình Database) */
+export async function fetchAdminTableCounts(): Promise<Record<string, number>> {
+  const entries = await Promise.all(
+    ADMIN_DB_TABLES.map(async t => {
+      const { count } = await supabase
+        .from(t.name as any)
+        .select('*', { count: 'exact', head: true });
+      return [t.name, count || 0] as const;
+    })
+  );
+  return Object.fromEntries(entries);
+}
+
+/** Lấy tối đa `limit` dòng của một bảng */
+export async function fetchAdminTableRows(tableName: string, limit = 100): Promise<any[]> {
+  const { data, error } = await supabase
+    .from(tableName as any)
+    .select('*')
+    .limit(limit);
+  if (error) throw error;
+  return data || [];
+}
+
+/** Xóa một dòng theo id */
+export async function deleteAdminTableRow(tableName: string, rowId: string): Promise<void> {
+  const { error } = await supabase
+    .from(tableName as any)
+    .delete()
+    .eq('id', rowId);
+  if (error) throw error;
+}
+
+/** Xóa toàn bộ dòng trong bảng (dọn dẹp) */
+export async function clearAdminTable(tableName: string): Promise<void> {
+  const { error } = await supabase
+    .from(tableName as any)
+    .delete()
+    .not('id', 'is', null);
+  if (error) throw error;
 }

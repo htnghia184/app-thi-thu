@@ -16,6 +16,8 @@ import { ExamHeader } from './components/ExamHeader';
 import { ResultView } from './components/ResultView';
 import { WritingResultView } from './components/WritingResultView';
 import { SpeakingResultView } from './components/SpeakingResultView';
+import { GuestResultView } from './components/GuestResultView';
+import { GuestResultLookup } from './components/GuestResultLookup';
 import { ConfirmSubmitModal } from './components/ConfirmSubmitModal';
 import { StudentDashboard } from './components/StudentDashboard';
 import { ExamHistory } from './components/ExamHistory';
@@ -26,9 +28,14 @@ import { ExamPreview } from './admin/ExamPreview';
 import { AuthModal } from './components/Auth/AuthModal';
 import { AdminStudents } from './admin/AdminStudents';
 import { AdminClasses } from './admin/AdminClasses';
+import { AdminLeads } from './admin/AdminLeads';
+import { AdminOverview } from './admin/AdminOverview';
+import { AdminTeachers } from './admin/AdminTeachers';
+import { AdminGuestGrading } from './admin/AdminGuestGrading';
+import { AdminDatabase } from './admin/AdminDatabase';
 import { StudentProfile } from './components/StudentProfile';
 import { TeacherProfile } from './components/TeacherProfile';
-import { getCurrentUser, getUserProfile, signOut, fetchExams, deleteExam, upsertExam } from './lib/supabaseService';
+import { getCurrentUser, getUserProfile, signOut, fetchExams, fetchPublicExams, deleteExam, upsertExam } from './lib/supabaseService';
 import { Loader2, Shield, Headphones } from 'lucide-react';
 import { useDarkMode } from './hooks/useDarkMode';
 
@@ -48,8 +55,9 @@ function App() {
   const [editingExam, setEditingExam] = useState<VstepExamSet | null>(null);
   const [previewingExam, setPreviewingExam] = useState<VstepExamSet | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [adminTab, setAdminTab] = useState<'exams' | 'students' | 'classes' | 'grading' | 'speaking_grading'>('exams');
+  const [adminTab, setAdminTab] = useState<'overview' | 'exams' | 'students' | 'classes' | 'grading' | 'speaking_grading' | 'leads' | 'teachers' | 'guest_grading' | 'database'>('overview');
   const [isTeacherView, setIsTeacherView] = useState(false);
+  const [guestLookupOpen, setGuestLookupOpen] = useState(false);
 
   // Highlighter state
   const highlighter = useHighlighter();
@@ -85,6 +93,7 @@ function App() {
           setUserRole(role);
           if (role === 'teacher') {
             setIsTeacherView(true);
+            setAdminTab('exams');
           }
         }
       } catch (err) {
@@ -97,10 +106,10 @@ function App() {
   }, []);
 
   // Load exams from Supabase
-  const loadExams = useCallback(async () => {
+  const loadExams = useCallback(async (publicOnly = false) => {
     setExamsLoading(true);
     try {
-      const supabaseExams = await fetchExams();
+      const supabaseExams = publicOnly ? await fetchPublicExams() : await fetchExams();
       setExams(supabaseExams || []);
     } catch (err: any) {
       console.error('Failed to load exams:', err);
@@ -112,9 +121,9 @@ function App() {
 
   useEffect(() => {
     if (user) {
-      loadExams();
+      loadExams(userRole === 'guest');
     }
-  }, [user, loadExams]);
+  }, [user, userRole, loadExams]);
 
   const examState = useVstepExamState(
     selectedExam || { id: '', examTitle: '', description: '', skillType: 'reading', totalDurationMinutes: 60, totalQuestions: 0, passages: [], createdAt: '' },
@@ -141,13 +150,25 @@ function App() {
         setUserRole(role);
         if (role === 'teacher') {
           setIsTeacherView(true);
+          setAdminTab('exams');
         }
       }
     });
   };
 
+  const handleGuestLogin = () => {
+    // Guest là người dùng ảo (không có tài khoản Supabase) — chỉ được làm đề public
+    setUser({ id: '', email: 'Guest', full_name: 'Guest', isGuest: true });
+    setUserRole('guest');
+    setIsAdmin(false);
+    setIsTeacherView(false);
+    setPage('dashboard');
+  };
+
   const handleLogout = async () => {
-    await signOut();
+    if (userRole !== 'guest') {
+      await signOut();
+    }
     setUser(null);
     setUserRole(null);
     setIsAdmin(false);
@@ -243,16 +264,25 @@ function App() {
             onClick={() => setAuthModalOpen(true)}
             className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all"
           >
-            Sign In / Register
+            Sign In
           </button>
+          <button
+            onClick={handleGuestLogin}
+            className="mt-3 w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all"
+          >
+            Login as Guest
+          </button>
+          <p className="mt-4 text-xs text-gray-400 dark:text-gray-500">
+            No self-registration. Contact the administrator to create your account.
+          </p>
         </div>
-        <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} onAuthSuccess={handleAuthSuccess} />
+        <AuthModal isOpen={authModalOpen} onClose={() => setAuthModalOpen(false)} onAuthSuccess={handleAuthSuccess} onGuestLogin={handleGuestLogin} />
       </div>
     );
   }
 
   // Profile page (must come before admin/teacher view check)
-  if (page === 'profile') {
+  if (page === 'profile' && userRole !== 'guest') {
     if (isTeacherView || userRole === 'teacher') {
       return (
         <TeacherProfile
@@ -326,14 +356,59 @@ function App() {
           <AdminClasses userId={user?.id || ''} />
         ) : adminTab === 'students' ? (
           <AdminStudents onBack={() => setAdminTab('exams')} teacherId={isTeacherView ? user?.id : undefined} />
+        ) : adminTab === 'overview' && !isTeacherView ? (
+          <AdminOverview onNavigate={(tab) => setAdminTab(tab as any)} />
+        ) : adminTab === 'teachers' && !isTeacherView ? (
+          <AdminTeachers onNavigate={(tab) => setAdminTab(tab as any)} />
+        ) : adminTab === 'guest_grading' ? (
+          <AdminGuestGrading userId={user?.id || ''} viewMode={isTeacherView ? 'teacher' : 'admin'} />
+        ) : adminTab === 'database' && !isTeacherView ? (
+          <AdminDatabase />
+        ) : adminTab === 'leads' && !isTeacherView ? (
+          <AdminLeads />
         ) : null}
       </AdminLayout>
     );
   }
 
   // Exam History page
-  if (page === 'history') {
+  if (page === 'history' && userRole !== 'guest') {
     return <ExamHistory userId={user.id} onBack={handleBackToDashboard} />;
+  }
+
+  // Guest: hoàn thành bài → không hiện điểm ngay, để lại thông tin nhận kết quả
+  if (userRole === 'guest' && page === 'exam' && selectedExam) {
+    const guestDone = skillType === 'writing'
+      ? writingSubmitted
+      : examState.isCompleted;
+    if (guestDone) {
+      const hasAutoScore = skillType !== 'writing' && skillType !== 'speaking';
+      const results = hasAutoScore ? examState.calculateResults() : null;
+      return (
+        <GuestResultView
+          exam={selectedExam}
+          result={results ? {
+            correctCount: results.correctCount,
+            totalCount: results.totalCount,
+            vstepScore: results.vstepScore,
+            timeTaken: results.timeTaken,
+          } : null}
+          userAnswers={examState.userAnswers}
+          writingAnswers={writingAnswers}
+          onDone={handleReset}
+        />
+      );
+    }
+  }
+
+  // Guest: mở trang tra cứu kết quả (sdt + passcode)
+  if (userRole === 'guest' && guestLookupOpen) {
+    return (
+      <GuestResultLookup
+        onBack={() => setGuestLookupOpen(false)}
+        onHome={() => { setGuestLookupOpen(false); handleBackToDashboard(); }}
+      />
+    );
   }
 
   // Writing completed
@@ -609,6 +684,7 @@ function App() {
       onViewProfile={() => setPage('profile')}
       onLogout={handleLogout}
       onSwitchToAdmin={() => setIsAdmin(true)}
+      onLookupResult={() => setGuestLookupOpen(true)}
       isDark={isDark}
       toggleDarkMode={toggleDarkMode}
     />

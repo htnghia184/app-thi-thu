@@ -50,6 +50,13 @@ export const ExamPreview: React.FC<ExamPreviewProps> = ({ exam, onClose }) => {
              exam.skillType === 'listening' ? 'Listening' :
              exam.skillType === 'speaking' ? 'Speaking' : 'Writing'}
           </span>
+          <span className={`inline-flex items-center px-2.5 py-1 rounded-full text-xs font-semibold ${
+            exam.status === 'public'
+              ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/40 dark:text-emerald-300'
+              : 'bg-gray-100 text-gray-600 dark:bg-gray-600 dark:text-gray-300'
+          }`}>
+            {exam.status === 'public' ? 'Public' : 'Private'}
+          </span>
           <span className="flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-300">
             <Clock size={14} /> {exam.totalDurationMinutes} mins
           </span>

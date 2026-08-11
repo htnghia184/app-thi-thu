@@ -20,6 +20,7 @@ interface ResultViewProps {
   passages: { id: number; title: string; questions: Question[] }[];
   onReset: () => void;
   bookmarkedQuestions?: Set<number>;
+  resetLabel?: string;
 }
 
 const formatTime = (totalSeconds: number) => {
@@ -41,7 +42,8 @@ export const ResultView: React.FC<ResultViewProps> = ({
   results,
   passages,
   onReset,
-  bookmarkedQuestions
+  bookmarkedQuestions,
+  resetLabel = 'Take New Test',
 }) => {
   const optionLabels = ['A', 'B', 'C', 'D'];
 
@@ -106,7 +108,7 @@ export const ResultView: React.FC<ResultViewProps> = ({
             className="w-full py-3 md:py-4 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg font-semibold text-base md:text-lg hover:from-indigo-700 hover:to-indigo-800 shadow-lg transition-all flex items-center justify-center gap-2"
           >
             <RotateCcw size={20} className="md:size-[24px]" />
-            Take New Test
+            {resetLabel}
           </button>
         </div>
 
@@ -144,14 +146,18 @@ export const ResultView: React.FC<ResultViewProps> = ({
 
         {/* Review Section per Passage */}
         <div className="space-y-6 md:space-y-10">
-          {resultsByPassage.map(({ passage, results }) => (
+          {resultsByPassage.map(({ passage, results }, passageIndex) => {
+            // Số thứ tự câu hỏi toàn bài (1..N) — không phụ thuộc passage.id
+            // (passage.id từ DB là UUID, không dùng được phép tính)
+            const offset = passages.slice(0, passageIndex).reduce((sum, p) => sum + p.questions.length, 0);
+            return (
             <div key={passage.id} className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-8">
               <h2 className="text-lg md:text-2xl font-bold text-indigo-900 dark:text-gray-100 mb-4 md:mb-6">
-                Passage {passage.id}: {passage.title}
+                Passage {passageIndex + 1}: {passage.title}
               </h2>
               <div className="space-y-4 md:space-y-6">
                 {results.map((result, i) => {
-                  const globalQuestionNumber = i + (passage.id - 1) * 10 + 1;
+                  const globalQuestionNumber = offset + i + 1;
                   return (
                     <div
                       key={result.question.id}
@@ -247,7 +253,8 @@ export const ResultView: React.FC<ResultViewProps> = ({
                 })}
               </div>
             </div>
-          ))}
+            );
+          })}
         </div>
       </div>
     </div>

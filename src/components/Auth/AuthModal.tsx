@@ -1,21 +1,17 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
-import { X, Loader2 } from 'lucide-react';
+import { X, Loader2, UserRound } from 'lucide-react';
 
 interface AuthModalProps {
   isOpen: boolean;
   onClose: () => void;
   onAuthSuccess: () => void;
+  onGuestLogin: () => void;
 }
 
-type AuthMode = 'login' | 'register';
-
-export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess }) => {
-  const [mode, setMode] = useState<AuthMode>('login');
+export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuccess, onGuestLogin }) => {
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [fullName, setFullName] = useState('');
-  const [role, setRole] = useState<'student' | 'admin' | 'teacher'>('student');
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
 
@@ -27,32 +23,24 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
     setLoading(true);
 
     try {
-      if (mode === 'register') {
-        // Pass full_name and role as user_metadata so the DB trigger creates the profile correctly
-        const { error: authError } = await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            data: { full_name: fullName, role },
-          },
-        });
-        if (authError) throw authError;
-        setError('Registration successful! You can now log in.');
-        setMode('login');
-      } else {
-        const { error: authError } = await supabase.auth.signInWithPassword({
-          email,
-          password,
-        });
-        if (authError) throw authError;
-        onAuthSuccess();
-        onClose();
-      }
+      const { error: authError } = await supabase.auth.signInWithPassword({
+        email,
+        password,
+      });
+      if (authError) throw authError;
+      onAuthSuccess();
+      onClose();
     } catch (err: any) {
       setError(err.message || 'An error occurred');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleGuestLogin = () => {
+    setError('');
+    onGuestLogin();
+    onClose();
   };
 
   return (
@@ -65,39 +53,14 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
           <X size={24} />
         </button>
 
-        <h2 className="text-2xl font-bold text-indigo-900 dark:text-gray-100 mb-6 text-center">
-          {mode === 'login' ? 'Welcome Back' : 'Create Account'}
+        <h2 className="text-2xl font-bold text-indigo-900 dark:text-gray-100 mb-2 text-center">
+          Welcome Back
         </h2>
+        <p className="text-center text-sm text-gray-500 dark:text-gray-400 mb-6">
+          Sign in to start practicing
+        </p>
 
         <form onSubmit={handleSubmit} className="space-y-5">
-          {mode === 'register' && (
-            <>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Full Name</label>
-                <input
-                  type="text"
-                  value={fullName}
-                  onChange={(e) => setFullName(e.target.value)}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-gray-200"
-                  placeholder="Nguyen Van A"
-                  required
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Role</label>
-                <select
-                  value={role}
-                  onChange={(e) => setRole(e.target.value as 'student' | 'admin' | 'teacher')}
-                  className="w-full px-4 py-3 border border-gray-300 dark:border-gray-600 rounded-lg focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-gray-200"
-                >
-                  <option value="student">Student</option>
-                  <option value="teacher">Teacher</option>
-                  <option value="admin">Admin</option>
-                </select>
-              </div>
-            </>
-          )}
-
           <div>
             <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">Email</label>
             <input
@@ -124,11 +87,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
           </div>
 
           {error && (
-            <div className={`p-3 rounded-lg text-sm font-medium ${
-              error.includes('successful')
-                ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-300 border border-green-200 dark:border-green-800'
-                : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800'
-            }`}>
+            <div className="p-3 rounded-lg text-sm font-medium bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
               {error}
             </div>
           )}
@@ -139,18 +98,30 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
             className="w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg font-semibold hover:from-indigo-700 hover:to-indigo-800 disabled:opacity-50 disabled:cursor-not-allowed transition-all flex items-center justify-center gap-2"
           >
             {loading && <Loader2 size={20} className="animate-spin" />}
-            {mode === 'login' ? 'Sign In' : 'Create Account'}
+            Sign In
           </button>
         </form>
 
-        <div className="mt-6 text-center">
-          <button
-            onClick={() => { setMode(mode === 'login' ? 'register' : 'login'); setError(''); }}
-            className="text-indigo-600 dark:text-indigo-400 hover:text-indigo-800 dark:hover:text-indigo-300 text-sm font-medium"
-          >
-            {mode === 'login' ? "Don't have an account? Sign up" : 'Already have an account? Sign in'}
-          </button>
+        <div className="my-5 flex items-center gap-3">
+          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+          <span className="text-xs text-gray-400 dark:text-gray-500 font-medium">OR</span>
+          <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
         </div>
+
+        <button
+          onClick={handleGuestLogin}
+          className="w-full py-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all flex items-center justify-center gap-2"
+        >
+          <UserRound size={20} />
+          Login as Guest
+        </button>
+        <p className="mt-3 text-center text-xs text-gray-400 dark:text-gray-500">
+          Try public tests for free without an account
+        </p>
+
+        <p className="mt-6 text-center text-xs text-gray-400 dark:text-gray-500">
+          No self-registration. Contact the administrator to create your account.
+        </p>
       </div>
     </div>
   );
