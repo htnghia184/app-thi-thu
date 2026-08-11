@@ -373,12 +373,6 @@ export const GuestBundleView: React.FC<GuestBundleViewProps> = ({
                     </div>
                   </div>
                   <div className="flex items-center gap-3 flex-shrink-0">
-                    {result && hasAutoScore && result.score != null && (
-                      <div className="text-right">
-                        <div className="text-2xl font-bold text-indigo-600 dark:text-indigo-400">{result.score}</div>
-                        <div className="text-[10px] text-gray-400 dark:text-gray-500">VSTEP</div>
-                      </div>
-                    )}
                     {result && !hasAutoScore && (
                       <div className="text-right">
                         <div className="text-xs font-semibold text-amber-600 dark:text-amber-400">Đang chờ chấm</div>

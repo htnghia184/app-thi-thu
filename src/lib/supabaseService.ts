@@ -1891,13 +1891,29 @@ export async function createGuestSession(payload: {
   passcode: string;
   bundle_id?: string;
 }): Promise<GuestSession> {
+  // Dùng RPC SECURITY DEFINER thay vì insert().select():
+  // guest (anon) không có SELECT policy trên guest_sessions nên không đọc
+  // được dòng vừa chèn qua RETURNING → RPC trả dòng trực tiếp.
   for (let attempt = 0; attempt < 3; attempt++) {
-    const { data, error } = await supabase
-      .from('guest_sessions')
-      .insert(payload)
-      .select()
-      .single();
-    if (!error && data) return data as GuestSession;
+    const { data, error } = await supabase.rpc('create_guest_session', {
+      p_full_name: payload.full_name,
+      p_phone: payload.phone,
+      p_email: payload.email || '',
+      p_passcode: payload.passcode,
+      p_bundle_id: payload.bundle_id || null,
+    });
+    const row = Array.isArray(data) && data.length > 0 ? data[0] : null;
+    if (!error && row) {
+      return {
+        id: row.id,
+        full_name: row.full_name,
+        phone: row.phone,
+        email: row.email || '',
+        passcode: row.passcode,
+        bundle_id: row.bundle_id || null,
+        created_at: row.created_at,
+      };
+    }
     // 23505 = unique_violation (passcode trùng) → sinh lại
     if ((error as any)?.code !== '23505') throw error;
     payload = { ...payload, passcode: generatePasscode() };
