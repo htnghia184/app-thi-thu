@@ -43,17 +43,48 @@ BEGIN
   -- Tạo user trong auth.users + auth.identities.
   -- email_confirm = TRUE: user đăng nhập được ngay, không cần xác nhận mail.
   BEGIN
-    SELECT auth.admin_create_user(
-      jsonb_build_object('full_name', p_full_name, 'role', p_role),
-      p_email,
-      NULL,
-      p_password,
-      TRUE,
-      TRUE
-    ) INTO v_uid;
+    -- Ưu tiên helper GoTrue nếu bản Supabase có
+    IF to_regprocedure('auth.admin_create_user(jsonb, text, text, text, boolean, boolean)') IS NOT NULL THEN
+      SELECT auth.admin_create_user(
+        jsonb_build_object('full_name', p_full_name, 'role', p_role),
+        p_email,
+        NULL,
+        p_password,
+        TRUE,
+        TRUE
+      ) INTO v_uid;
+    ELSE
+      -- Bản cũ: INSERT thủ công auth.users + auth.identities
+      -- (dùng extensions.crypt/gen_salt — bản này không có auth.gen_salt)
+      INSERT INTO auth.users (
+        instance_id, id, aud, role, email, encrypted_password,
+        email_confirmed_at, confirmation_sent_at, created_at, updated_at,
+        raw_app_meta_data, raw_user_meta_data, is_super_admin
+      ) VALUES (
+        '00000000-0000-0000-0000-000000000000',
+        gen_random_uuid(),
+        'authenticated', 'authenticated', p_email,
+        extensions.crypt(p_password, extensions.gen_salt('bf')),
+        now(), now(), now(), now(),
+        jsonb_build_object('provider', 'email', 'providers', ARRAY['email']::text[]),
+        jsonb_build_object('full_name', p_full_name, 'role', p_role),
+        FALSE
+      ) RETURNING id INTO v_uid;
+
+      INSERT INTO auth.identities (
+        id, user_id, provider_id, identity_data, provider,
+        last_sign_in_at, created_at, updated_at
+      ) VALUES (
+        v_uid, v_uid, v_uid,
+        jsonb_build_object('sub', v_uid::text, 'email', p_email),
+        'email', now(), now(), now()
+      );
+    END IF;
   EXCEPTION
     WHEN unique_violation THEN
       RAISE EXCEPTION 'Email da ton tai: %', p_email;
+    WHEN insufficient_privilege THEN
+      RAISE EXCEPTION 'Khong du quyen thao tac tren auth schema';
   END;
 
   -- FIX QUAN TRỌNG: trigger handle_new_user không đọc được

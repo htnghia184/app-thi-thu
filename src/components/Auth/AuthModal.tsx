@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { supabase } from '../../lib/supabaseClient';
 import { X, Loader2, UserRound } from 'lucide-react';
+import logoBg from '../../../logo-without-background.png';
 
 interface AuthModalProps {
   isOpen: boolean;
@@ -44,14 +45,23 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
   };
 
   return (
-    <div className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-50">
-      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
-        <button
-          onClick={onClose}
-          className="absolute top-4 right-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
-        >
-          <X size={24} />
-        </button>
+    <div className="fixed inset-0 z-50">
+      {/* Nền lặp lại logo */}
+      <div
+        className="logo-pattern"
+        style={{ backgroundImage: `url(${logoBg})` }}
+      />
+      {/* Lớp phủ tối */}
+      <div className="absolute inset-0 bg-black/60 backdrop-blur-sm" />
+
+      <div className="relative z-10 min-h-full flex items-center justify-center p-4">
+        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl w-full max-w-md p-8 relative">
+          <button
+            onClick={onClose}
+            className="absolute top-4 right-4 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
+          >
+            <X size={24} />
+          </button>
 
         <h2 className="text-2xl font-bold text-indigo-900 dark:text-gray-100 mb-2 text-center">
           Welcome Back
@@ -122,6 +132,7 @@ export const AuthModal: React.FC<AuthModalProps> = ({ isOpen, onClose, onAuthSuc
         <p className="mt-6 text-center text-xs text-gray-400 dark:text-gray-500">
           No self-registration. Contact the administrator to create your account.
         </p>
+        </div>
       </div>
     </div>
   );

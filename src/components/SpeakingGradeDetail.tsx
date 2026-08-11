@@ -9,13 +9,17 @@ interface SpeakingGradeDetailProps {
   submission: any;
   onBack: () => void;
   onGraded: () => void;
+  /** Role người đang chấm — chỉ admin mới được tải audio về */
+  userRole?: string | null;
 }
 
 export const SpeakingGradeDetail: React.FC<SpeakingGradeDetailProps> = ({
   submission,
   onBack,
   onGraded,
+  userRole,
 }) => {
+  const canDownload = userRole === 'admin';
   const [score, setScore] = useState<number>(submission.grade?.score ?? 5);
   const [feedback, setFeedback] = useState<string>(submission.grade?.feedback ?? '');
   const [criteria, setCriteria] = useState<Record<string, boolean>>({
@@ -142,16 +146,18 @@ export const SpeakingGradeDetail: React.FC<SpeakingGradeDetailProps> = ({
                       <Volume2 size={18} />
                       Student Recording
                     </h3>
-                    <a
-                      href={submission.audio_url}
-                      download={`speaking-${submission.passage_title || `part-${submission.passage_id}`}-${submission.user_name}.webm`}
-                      className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-white text-sm font-medium transition-all"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                    >
-                      <Download size={14} />
-                      Download
-                    </a>
+                    {canDownload && (
+                      <a
+                        href={submission.audio_url}
+                        download={`speaking-${submission.passage_title || `part-${submission.passage_id}`}-${submission.user_name}.webm`}
+                        className="flex items-center gap-1.5 px-3 py-1.5 bg-white/20 hover:bg-white/30 rounded-lg text-white text-sm font-medium transition-all"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                      >
+                        <Download size={14} />
+                        Download
+                      </a>
+                    )}
                   </div>
                 </div>
                 <div className="p-6">

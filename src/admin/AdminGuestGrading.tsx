@@ -2,11 +2,11 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Loader2, RefreshCw, Search, Filter, User, Phone, Mail, FileText,
   ClipboardList, CheckCircle2, Clock, GraduationCap, X, Save,
-  AlertCircle, Mic, PenLine, TrendingUp, ShieldCheck,
+  AlertCircle, Mic, PenLine, TrendingUp, ShieldCheck, Download,
 } from 'lucide-react';
 import {
   fetchGuestLeadsForGrading, fetchTeachers, assignTeacherToLead,
-  submitGuestLeadGrade,
+  submitGuestLeadGrade, getAudioUrl,
 } from '../lib/supabaseService';
 
 interface AdminGuestGradingProps {
@@ -499,15 +499,49 @@ const GradeModal: React.FC<GradeModalProps> = ({
             </div>
           )}
 
-          {/* Speaking note */}
+          {/* Speaking audio */}
           {isSpeaking && (
-            <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
-              <Mic size={18} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
-              <div className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
-                <span className="font-semibold">Speaking của guest chưa được lưu file ghi âm.</span>
-                <br />
-                Bạn vẫn có thể ghi nhận điểm & feedback (sẽ gửi qua Zalo) nếu có thông tin thêm từ buổi tư vấn.
-              </div>
+            <div>
+              <h4 className="text-sm font-bold text-indigo-900 dark:text-gray-100 mb-3 flex items-center gap-2">
+                <Mic size={16} className="text-rose-500" /> Bài nói của thí sinh
+              </h4>
+              {Array.isArray(lead.speaking_audio) && lead.speaking_audio.length > 0 ? (
+                <div className="space-y-3">
+                  {lead.speaking_audio.map((rec: any, i: number) => (
+                    <div key={i} className="p-4 bg-gray-50 dark:bg-gray-700/50 rounded-xl">
+                      <div className="flex items-center justify-between mb-2 gap-2">
+                        <div className="text-xs font-bold text-gray-600 dark:text-gray-300">
+                          Part {rec.passage_number} — {rec.passage_title || 'Speaking'}
+                          {rec.duration_seconds ? <span className="text-gray-400 font-normal"> · {rec.duration_seconds}s</span> : null}
+                        </div>
+                        {isAdmin && rec.audio_url && (
+                          <a
+                            href={getAudioUrl(rec.audio_url)}
+                            download
+                            className="flex items-center gap-1.5 text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline flex-shrink-0"
+                          >
+                            <Download size={13} /> Tải về
+                          </a>
+                        )}
+                      </div>
+                      {rec.audio_url ? (
+                        <audio controls src={getAudioUrl(rec.audio_url)} className="w-full" />
+                      ) : (
+                        <p className="text-xs text-amber-600 dark:text-amber-400">File ghi âm không có URL.</p>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="p-4 rounded-xl bg-amber-50 dark:bg-amber-900/20 border border-amber-200 dark:border-amber-800 flex items-start gap-3">
+                  <AlertCircle size={16} className="text-amber-600 dark:text-amber-400 flex-shrink-0 mt-0.5" />
+                  <div className="text-sm text-amber-800 dark:text-amber-200 leading-relaxed">
+                    Không có file ghi âm nào được lưu cho lead này.
+                    <br />
+                    Bạn vẫn có thể ghi nhận điểm & feedback (sẽ gửi qua Zalo) nếu có thông tin thêm từ buổi tư vấn.
+                  </div>
+                </div>
+              )}
             </div>
           )}
 

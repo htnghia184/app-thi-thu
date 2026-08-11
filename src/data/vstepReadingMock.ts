@@ -33,6 +33,10 @@ export interface Passage {
   audioUrl?: string;
   questions: Question[];
   recommendedMinutes?: number;
+  /** Thời lượng (giây) — đề Speaking: giới hạn ghi âm mỗi phần; hết giờ tự dừng record */
+  durationSeconds?: number;
+  /** Thời gian chuẩn bị (giây) — đề Speaking: đếm ngược đọc đề trước khi tự bật ghi âm */
+  prepSeconds?: number;
   /** Chỉ dùng cho đề writing: loại task (email/essay/letter) */
   taskType?: WritingTask['taskType'];
   wordLimit?: number;

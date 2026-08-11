@@ -1,41 +1,25 @@
 -- ============================================================
--- 008_admin_tools.sql
--- CÔNG CỤ QUẢN TRỊ: TẠO / XÓA USER + DỌN DẸP DATABASE
+-- 010_admin_user_functions_fix.sql
+-- FIX: tạo/xóa user KHÔNG phụ thuộc helper GoTrue bản mới
 --
--- 1) Admin được DELETE trên exam_leads, writing_submissions,
---    speaking_submissions (phục vụ tab Database dọn dẹp dữ liệu)
--- 2) Hàm public.admin_create_user() — admin tạo tài khoản
---    (student / teacher) ngay từ tab Admin, không cần vào SQL Editor
--- 3) Hàm public.admin_delete_user() — admin xóa tài khoản
---    (cascade xuống profiles, exam_results, ...)
+-- VẤN ĐỀ:
+--   + auth.admin_delete_user(uuid, boolean) KHÔNG TỒN TẠI trên
+--     bản Supabase hiện tại → nút xóa học viên/giáo viên báo lỗi
+--     "function auth.admin_delete_user(uuid, boolean) does not exist"
+--   + auth.admin_create_user(...) có thể cũng không tồn tại.
 --
--- LƯU Ý (đã fix theo file 010): không phụ thuộc helper GoTrue
--- auth.admin_create_user / auth.admin_delete_user vì bản Supabase
--- hiện tại KHÔNG có các hàm này. Xem file 010_admin_user_functions_fix.sql.
+-- FIX:
+--   + admin_delete_user: dọn dữ liệu khóa ngoài bị chặn rồi
+--     DELETE trực tiếp auth.users (cascade xuống profiles,
+--     exam_results, ...)
+--   + admin_create_user: ưu tiên dùng helper GoTrue nếu có,
+--     không có thì INSERT thủ công vào auth.users + auth.identities.
 --
--- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ file → Run.
--- Chạy SAU file 007_guest_grading.sql. An toàn khi chạy lại nhiều lần.
+-- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ → Run.
 -- ============================================================
 
 -- ------------------------------------------------------------
--- 1. DELETE policies cho admin (dọn dẹp dữ liệu từ app)
--- ------------------------------------------------------------
-DROP POLICY IF EXISTS "Admins can delete exam leads" ON exam_leads;
-CREATE POLICY "Admins can delete exam leads" ON exam_leads
-  FOR DELETE USING (public.get_user_role() = 'admin');
-
-DROP POLICY IF EXISTS "Admins can delete writing submissions" ON writing_submissions;
-CREATE POLICY "Admins can delete writing submissions" ON writing_submissions
-  FOR DELETE USING (public.get_user_role() = 'admin');
-
-DROP POLICY IF EXISTS "Admins can delete speaking submissions" ON speaking_submissions;
-CREATE POLICY "Admins can delete speaking submissions" ON speaking_submissions
-  FOR DELETE USING (public.get_user_role() = 'admin');
-
--- ------------------------------------------------------------
--- 2. Hàm tạo tài khoản (student / teacher) — chỉ admin gọi được.
---    Trả về UUID user vừa tạo.
---    Trigger handle_new_user sẽ tự tạo bản ghi profiles kèm role.
+-- 1. HÀM TẠO USER (student / teacher)
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.admin_create_user(
   p_email TEXT,
@@ -63,8 +47,6 @@ BEGIN
     RAISE EXCEPTION 'Mat khau phai tu 6 ky tu tro len';
   END IF;
 
-  -- Tạo user trong auth.users + auth.identities.
-  -- email_confirm = TRUE: user đăng nhập được ngay, không cần xác nhận mail.
   BEGIN
     -- Ưu tiên helper GoTrue nếu bản Supabase có
     IF to_regprocedure('auth.admin_create_user(jsonb, text, text, text, boolean, boolean)') IS NOT NULL THEN
@@ -110,10 +92,9 @@ BEGIN
       RAISE EXCEPTION 'Khong du quyen thao tac tren auth schema';
   END;
 
-  -- LƯU Ý: trigger handle_new_user chỉ đọc raw_user_meta_data (không
-  -- đọc được full_name/role từ app_metadata), nên phải tự đảm bảo
-  -- profile đúng full_name + role. INSERT mới nếu chưa có, UPDATE lại
-  -- nếu trigger đã tạo profile trước đó (role mặc định student).
+  -- Đảm bảo profile đúng full_name + role (trigger handle_new_user chỉ
+  -- đọc raw_user_meta_data; khi dùng helper GoTrue thì full_name/role
+  -- nằm trong app_metadata nên profile cũ tạo ra sẽ sai → phải sửa lại)
   INSERT INTO public.profiles (id, email, full_name, role)
   VALUES (v_uid, p_email, p_full_name, p_role::public.user_role)
   ON CONFLICT (id) DO UPDATE SET
@@ -125,15 +106,13 @@ BEGIN
 END;
 $$;
 
--- Chỉ user đã đăng nhập (admin) được gọi hàm
 REVOKE ALL ON FUNCTION public.admin_create_user(TEXT, TEXT, TEXT, TEXT) FROM PUBLIC;
 GRANT EXECUTE ON FUNCTION public.admin_create_user(TEXT, TEXT, TEXT, TEXT) TO authenticated;
 
 -- ------------------------------------------------------------
--- 3. Hàm xóa tài khoản — chỉ admin gọi được.
---    Không dùng auth.admin_delete_user (bản Supabase này không có).
---    Dọn FK bị chặn rồi DELETE trực tiếp auth.users
---    (cascade xuống profiles, exam_results...).
+-- 2. HÀM XÓA USER
+--    Không dùng auth.admin_delete_user (không tồn tại ở bản này).
+--    Dọn FK bị chặn rồi DELETE trực tiếp auth.users.
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.admin_delete_user(p_user_id UUID)
 RETURNS VOID
@@ -142,6 +121,7 @@ SECURITY DEFINER
 SET search_path = public
 AS $$
 BEGIN
+  -- Chỉ admin mới được xóa tài khoản
   IF public.get_user_role() <> 'admin' THEN
     RAISE EXCEPTION 'Permission denied: chi admin moi duoc xoa tai khoan';
   END IF;
@@ -153,10 +133,10 @@ BEGIN
   DELETE FROM public.classes WHERE created_by = p_user_id;
   UPDATE public.exams SET created_by = NULL WHERE created_by = p_user_id;
 
-  -- Cascade tự động:
+  -- Các cascade tự động (không cần xử lý):
   --   exam_leads.assigned_teacher_id / graded_by → ON DELETE SET NULL
-  --   profiles.id    → ON DELETE CASCADE từ auth.users
-  --   exam_results   → ON DELETE CASCADE từ profiles
+  --   profiles.id                         → ON DELETE CASCADE từ auth.users
+  --   exam_results.user_id                → ON DELETE CASCADE từ profiles
 
   DELETE FROM auth.users WHERE id = p_user_id;
 
@@ -171,6 +151,7 @@ GRANT EXECUTE ON FUNCTION public.admin_delete_user(UUID) TO authenticated;
 
 -- ------------------------------------------------------------
 -- Kiểm tra nhanh:
--- SELECT public.admin_create_user('teacher@example.com', 'password123', 'Cô Giáo', 'teacher');
--- SELECT public.admin_delete_user('UUID_CUA_USER');
+-- SELECT public.admin_create_user('test@fix.vn', 'password123', 'Người Test', 'teacher');
+-- SELECT id, email, full_name, role FROM public.profiles WHERE email = 'test@fix.vn';
+-- SELECT public.admin_delete_user(id) FROM public.profiles WHERE email = 'test@fix.vn';
 -- ============================================================

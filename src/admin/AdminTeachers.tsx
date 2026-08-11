@@ -1,7 +1,7 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, RefreshCw, GraduationCap, Mail, School, Users,
-  ClipboardList, CheckCircle2, Info, UserPlus, Trash2,
+  ClipboardList, CheckCircle2, UserPlus, Trash2,
 } from 'lucide-react';
 import { fetchTeachersWithStats, TeacherWithStats, adminDeleteUser } from '../lib/supabaseService';
 import { CreateUserModal } from './CreateUserModal';
@@ -73,24 +73,6 @@ export const AdminTeachers: React.FC<AdminTeachersProps> = ({ onNavigate }) => {
           <UserPlus size={16} />
           Tạo tài khoản giáo viên
         </button>
-      </div>
-
-      {/* Hướng dẫn tạo tài khoản giáo viên */}
-      <div className="p-4 mb-6 rounded-lg text-sm bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-200 flex items-start gap-3">
-        <Info size={18} className="flex-shrink-0 mt-0.5" />
-        <div>
-          <p className="font-semibold mb-1">Tạo tài khoản giáo viên</p>
-          <p className="text-xs leading-relaxed">
-            Bấm nút <span className="font-semibold">"Tạo tài khoản giáo viên"</span> bên trên để tạo trực tiếp từ app.
-            Cách thay thế (nếu muốn làm bằng tay trong SQL Editor):
-          </p>
-          <pre className="mt-2 p-3 bg-white/60 dark:bg-gray-900/40 rounded-lg text-[11px] overflow-x-auto font-mono">
-{`-- Cách tạo bằng SQL Editor (migration 008 đã có hàm sẵn)
-SELECT public.admin_create_user(
-  'email@example.com', 'matkhau123', 'Cô Giáo', 'teacher'
-);`}
-          </pre>
-        </div>
       </div>
 
       {error && (

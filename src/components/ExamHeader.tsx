@@ -59,7 +59,7 @@ export const ExamHeader: React.FC<ExamHeaderProps> = ({
           </button>
         </div>
       </div>
-      {skillType !== 'writing' && totalPassages > 0 && (
+      {skillType !== 'writing' && skillType !== 'speaking' && totalPassages > 0 && (
         <div className="flex items-center gap-2 px-4 md:px-8 py-3 bg-black/10 overflow-x-auto">
           {Array.from({ length: totalPassages }, (_, i) => (
             <button key={i} onClick={() => onSelectPassage(i)}

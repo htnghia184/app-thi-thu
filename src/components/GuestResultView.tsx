@@ -16,6 +16,8 @@ interface GuestResultViewProps {
   } | null;
   userAnswers: Record<number, number | null>;
   writingAnswers?: Record<number, string>;
+  /** Audio speaking của guest đã upload trong lúc ghi âm — lưu vào exam_leads để giáo viên chấm */
+  speakingAudios?: any[];
   onDone: () => void;
 }
 
@@ -24,6 +26,7 @@ export const GuestResultView: React.FC<GuestResultViewProps> = ({
   result,
   userAnswers,
   writingAnswers,
+  speakingAudios,
   onDone,
 }) => {
   const [fullName, setFullName] = useState('');
@@ -67,6 +70,8 @@ export const GuestResultView: React.FC<GuestResultViewProps> = ({
         user_answers: Object.keys(userAnswers).length > 0 ? userAnswers : null,
         // Nội dung bài viết (writing) — giáo viên sẽ chấm ở tab "Guest Grading"
         writing_answers: writingAnswers && Object.keys(writingAnswers).length > 0 ? writingAnswers : null,
+        // Audio speaking đã upload — giáo viên sẽ chấm ở tab "Guest Grading"
+        speaking_audio: speakingAudios && speakingAudios.length > 0 ? speakingAudios : null,
       });
       setSubmitted(true);
     } catch (err: any) {

@@ -150,3 +150,18 @@ body {
 /* --- List items hover --- */
 :root.dark .dark\:hover\:bg-gray-50:hover { background-color: #374151 !important; }
 :root.dark .dark\:hover\:bg-indigo-50:hover { background-color: rgba(49, 46, 129, 0.3) !important; }
+
+/* --- Repeating logo background (login / home) --- */
+.logo-pattern {
+  position: absolute;
+  inset: 0;
+  background-repeat: repeat;
+  background-size: 480px auto;
+  opacity: 0.25;
+  pointer-events: none;
+}
+/* Dark mode: logo chuyển thành màu trắng (silhouette) */
+:root.dark .logo-pattern {
+  filter: brightness(0) invert(1);
+  opacity: 0.4;
+}

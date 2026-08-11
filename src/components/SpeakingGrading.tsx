@@ -10,6 +10,8 @@ interface SpeakingGradingProps {
   user: any;
   userId: string;
   onBack: () => void;
+  /** Role người đang xem — chỉ admin mới được tải audio về */
+  userRole?: string | null;
 }
 
 type StatusFilter = 'all' | 'pending' | 'graded';
@@ -18,6 +20,7 @@ export const SpeakingGrading: React.FC<SpeakingGradingProps> = ({
   user,
   userId,
   onBack,
+  userRole,
 }) => {
   const [submissions, setSubmissions] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -94,6 +97,7 @@ export const SpeakingGrading: React.FC<SpeakingGradingProps> = ({
         submission={selectedSubmission}
         onBack={() => setSelectedSubmission(null)}
         onGraded={handleGraded}
+        userRole={userRole}
       />
     );
   }

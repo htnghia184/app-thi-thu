@@ -83,6 +83,8 @@ async function hydrateExams(examsData: any[]): Promise<VstepExamSet[]> {
         taskType: passageRow.task_type || undefined,
         wordLimit: passageRow.word_limit ?? undefined,
         instructions: passageRow.instructions || '',
+        durationSeconds: passageRow.duration_seconds ?? undefined,
+        prepSeconds: passageRow.prep_seconds ?? undefined,
       });
     }
 
@@ -196,7 +198,9 @@ export async function fetchExamById(examId: string): Promise<VstepExamSet | null
       taskType: passageRow.task_type || undefined,
       wordLimit: passageRow.word_limit ?? undefined,
       instructions: passageRow.instructions || '',
-    });
+        durationSeconds: passageRow.duration_seconds ?? undefined,
+        prepSeconds: passageRow.prep_seconds ?? undefined,
+      });
   }
 
   const isWriting = (examRow.skill_type || 'reading') === 'writing';
@@ -293,6 +297,8 @@ export async function upsertExam(exam: VstepExamSet, userId?: string): Promise<v
         task_type: passage.taskType || '',
         word_limit: passage.wordLimit ?? null,
         instructions: passage.instructions || '',
+        duration_seconds: passage.durationSeconds ?? null,
+        prep_seconds: passage.prepSeconds ?? null,
       })
       .select()
       .single();
@@ -1239,6 +1245,79 @@ export async function uploadSpeakingAudio(
   return urlData.publicUrl;
 }
 
+/**
+ * Upload audio speaking của GUEST (không tài khoản) lên storage.
+ * App giữ các URL này và gắn vào exam_leads (cột speaking_audio) khi
+ * guest để lại thông tin liên hệ ở màn hình nhận kết quả.
+ */
+export async function uploadGuestSpeakingAudio(
+  file: Blob,
+  examId: string,
+  passageNumber: number
+): Promise<string> {
+  const ext = file.type.includes('mp4') ? 'm4a' : file.type.includes('aac') ? 'aac' : 'webm';
+  const contentType = file.type || 'audio/webm';
+  const fileName = `guest/${examId}/${passageNumber}_${Date.now()}_${Math.floor(Math.random() * 10000)}.${ext}`;
+  const { error: uploadError } = await supabase.storage
+    .from('exam-audio')
+    .upload(fileName, file, { contentType, upsert: false });
+
+  if (uploadError) throw uploadError;
+
+  const { data: urlData } = supabase.storage
+    .from('exam-audio')
+    .getPublicUrl(fileName);
+
+  return urlData.publicUrl;
+}
+
+// ==================== Storage Management (Admin Database tab) ====================
+
+export interface StorageItem {
+  name: string;
+  id: string | null;
+  isFolder: boolean;
+  size?: number;
+  mimetype?: string;
+  updatedAt?: string;
+}
+
+/**
+ * Liệt kê folders/files trong bucket exam-audio (path rỗng = gốc).
+ * Chỉ admin được dùng (RLS storage). Trả về URL công khai cho file.
+ */
+export async function fetchStorageListing(path: string): Promise<StorageItem[]> {
+  const { data, error } = await supabase.storage
+    .from('exam-audio')
+    .list(path, {
+      limit: 200,
+      offset: 0,
+      sortBy: { column: 'name', order: 'asc' },
+    });
+
+  if (error) throw error;
+
+  return (data || []).map(item => ({
+    name: item.name,
+    id: item.id,
+    isFolder: item.metadata === null,
+    size: item.metadata?.size,
+    mimetype: item.metadata?.mimetype,
+    updatedAt: item.metadata?.lastModified
+      ? new Date(item.metadata.lastModified).toLocaleString('vi-VN')
+      : undefined,
+  }));
+}
+
+/** Xóa 1 file khỏi bucket exam-audio (admin). */
+export async function deleteStorageObject(filePath: string): Promise<void> {
+  const { error } = await supabase.storage
+    .from('exam-audio')
+    .remove([filePath]);
+
+  if (error) throw error;
+}
+
 export async function submitSpeakingSubmission(
   userId: string,
   examId: string,
@@ -1669,6 +1748,8 @@ export interface GuestLeadResult {
   time_spent_seconds?: number | null;
   user_answers?: Record<string, number | null> | null;
   writing_answers?: Record<string, string> | null;
+  /** Audio speaking của guest: [{ passage_number, passage_title, audio_url, duration_seconds }] */
+  speaking_audio?: any[] | null;
 }
 
 /**

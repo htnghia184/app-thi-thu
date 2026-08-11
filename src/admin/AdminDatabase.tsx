@@ -1,11 +1,12 @@
 import React, { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, RefreshCw, ArrowLeft, Trash2, Database, Table2,
-  AlertTriangle, Search, X, Info,
+  AlertTriangle, Search, X, Info, HardDrive, FolderOpen, FileAudio, Download,
 } from 'lucide-react';
 import {
   ADMIN_DB_TABLES, fetchAdminTableCounts, fetchAdminTableRows,
   deleteAdminTableRow, clearAdminTable,
+  fetchStorageListing, deleteStorageObject, getAudioUrl, StorageItem,
 } from '../lib/supabaseService';
 
 export const AdminDatabase: React.FC = () => {
@@ -13,6 +14,7 @@ export const AdminDatabase: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selected, setSelected] = useState<string | null>(null);
+  const [storageOpen, setStorageOpen] = useState(false);
   const [confirmClear, setConfirmClear] = useState(false);
 
   const loadCounts = useCallback(async () => {
@@ -32,6 +34,10 @@ export const AdminDatabase: React.FC = () => {
   useEffect(() => {
     loadCounts();
   }, [loadCounts]);
+
+  if (storageOpen) {
+    return <StorageView onBack={() => setStorageOpen(false)} />;
+  }
 
   if (selected) {
     return (
@@ -110,6 +116,231 @@ export const AdminDatabase: React.FC = () => {
               )}
             </button>
           ))}
+        </div>
+      )}
+
+      {/* Storage */}
+      <button
+        onClick={() => setStorageOpen(true)}
+        className="mt-4 w-full bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-5 text-left hover:shadow-xl hover:-translate-y-0.5 transition-all group flex items-center justify-between"
+      >
+        <div className="flex items-center gap-3">
+          <div className="inline-flex p-2.5 rounded-lg bg-emerald-50 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400">
+            <HardDrive size={18} />
+          </div>
+          <div>
+            <div className="text-sm font-bold text-gray-900 dark:text-gray-100">Storage — bucket "exam-audio"</div>
+            <div className="text-[11px] text-gray-400 dark:text-gray-500 mt-0.5 font-mono">
+              audio đề thi · bài nói của student & guest
+            </div>
+          </div>
+        </div>
+        <FolderOpen size={18} className="text-gray-300 dark:text-gray-600 group-hover:text-emerald-500 transition-colors" />
+      </button>
+    </div>
+  );
+};
+
+// ==================== Storage view ====================
+
+interface StorageViewProps {
+  onBack: () => void;
+}
+
+const StorageView: React.FC<StorageViewProps> = ({ onBack }) => {
+  const [path, setPath] = useState('');
+  const [items, setItems] = useState<StorageItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [playing, setPlaying] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError('');
+    try {
+      const data = await fetchStorageListing(path);
+      setItems(data);
+    } catch (err: any) {
+      console.error('Failed to load storage:', err);
+      setError('Không thể tải storage. Kiểm tra đã chạy migration 013 (storage policies) chưa.');
+    } finally {
+      setLoading(false);
+    }
+  }, [path]);
+
+  useEffect(() => {
+    load();
+  }, [load]);
+
+  const segments = path ? path.split('/').filter(Boolean) : [];
+
+  const fullPath = (name: string) => (path ? `${path}/${name}` : name);
+
+  const handleDelete = async (name: string, isFolder: boolean) => {
+    if (isFolder) {
+      alert('Đây là folder — hãy vào trong để xóa từng file.');
+      return;
+    }
+    const p = fullPath(name);
+    if (!window.confirm(`Xóa file "${p}"?`)) return;
+    setBusy(true);
+    try {
+      await deleteStorageObject(p);
+      setItems(prev => prev.filter(i => i.name !== name));
+      if (playing === p) setPlaying(null);
+    } catch (err: any) {
+      alert('Không thể xóa file: ' + (err?.message || err));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const formatBytes = (bytes?: number) => {
+    if (bytes === undefined || bytes === null) return '';
+    if (bytes < 1024) return bytes + ' B';
+    if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB';
+    return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+  };
+
+  const isAudio = (item: StorageItem) =>
+    item.mimetype?.startsWith('audio/') || /\.(webm|m4a|aac|mp3|wav|ogg)$/i.test(item.name);
+
+  return (
+    <div>
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between gap-3 mb-6">
+        <div>
+          <button
+            onClick={onBack}
+            className="flex items-center gap-1.5 text-sm font-semibold text-indigo-600 dark:text-indigo-400 hover:underline mb-2"
+          >
+            <ArrowLeft size={16} /> Quay lại Database
+          </button>
+          <h2 className="text-2xl font-bold text-indigo-900 dark:text-gray-100 flex items-center gap-2">
+            <HardDrive size={22} className="text-emerald-500" />
+            Storage — bucket "exam-audio"
+          </h2>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            Xem, nghe, tải và xóa audio trong storage.
+          </p>
+        </div>
+        <button
+          onClick={load}
+          disabled={loading || busy}
+          className="flex items-center gap-2 px-3 py-2 bg-indigo-600 text-white rounded-lg font-semibold hover:bg-indigo-700 disabled:opacity-50 transition-all text-sm"
+        >
+          <RefreshCw size={15} className={loading ? 'animate-spin' : ''} />
+          Refresh
+        </button>
+      </div>
+
+      {/* Breadcrumb */}
+      <div className="flex items-center flex-wrap gap-1 mb-4 text-sm">
+        <button
+          onClick={() => setPath('')}
+          className={`px-2 py-1 rounded-lg font-medium transition-colors ${
+            path === '' ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+          }`}
+        >
+          exam-audio
+        </button>
+        {segments.map((seg, i) => (
+          <span key={i} className="flex items-center gap-1">
+            <span className="text-gray-300 dark:text-gray-600">/</span>
+            <button
+              onClick={() => setPath(segments.slice(0, i + 1).join('/'))}
+              className={`px-2 py-1 rounded-lg font-medium transition-colors ${
+                i === segments.length - 1 ? 'bg-emerald-100 dark:bg-emerald-900/40 text-emerald-700 dark:text-emerald-400' : 'text-gray-600 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
+              }`}
+            >
+              {seg}
+            </button>
+          </span>
+        ))}
+      </div>
+
+      {error && (
+        <div className="p-4 mb-4 rounded-lg text-sm font-medium bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800">
+          {error}
+        </div>
+      )}
+
+      {playing && (
+        <div className="p-4 mb-4 rounded-xl bg-emerald-50 dark:bg-emerald-900/20 border border-emerald-200 dark:border-emerald-800">
+          <audio controls src={playing} className="w-full" autoPlay />
+          <p className="mt-2 text-xs text-emerald-700 dark:text-emerald-300 font-mono truncate">{playing}</p>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 flex justify-center">
+          <Loader2 size={28} className="animate-spin text-indigo-600" />
+        </div>
+      ) : items.length === 0 ? (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-12 text-center">
+          <HardDrive size={40} className="mx-auto text-gray-300 dark:text-gray-600 mb-3" />
+          <p className="text-sm text-gray-500 dark:text-gray-400">Folder trống.</p>
+        </div>
+      ) : (
+        <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
+          <div className="divide-y divide-gray-100 dark:divide-gray-700">
+            {items.map(item => {
+              const filePath = fullPath(item.name);
+              const audio = !item.isFolder && isAudio(item);
+              return (
+                <div key={item.id || item.name} className="flex items-center gap-3 px-4 py-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                  {item.isFolder ? (
+                    <button
+                      onClick={() => setPath(filePath)}
+                      className="flex items-center gap-3 flex-1 min-w-0 text-left"
+                    >
+                      <FolderOpen size={20} className="text-amber-500 flex-shrink-0" />
+                      <span className="font-medium text-gray-800 dark:text-gray-200 truncate">{item.name}</span>
+                    </button>
+                  ) : (
+                    <>
+                      <FileAudio size={20} className="text-indigo-400 flex-shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <div className="font-medium text-gray-800 dark:text-gray-200 truncate">{item.name}</div>
+                        <div className="text-[11px] text-gray-400 dark:text-gray-500">
+                          {formatBytes(item.size)}{item.mimetype ? ` · ${item.mimetype}` : ''}{item.updatedAt ? ` · ${item.updatedAt}` : ''}
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-1 flex-shrink-0">
+                        {audio && (
+                          <>
+                            <button
+                              onClick={() => setPlaying(playing === filePath ? null : filePath)}
+                              className="p-2 rounded-lg text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-900/30 transition-colors"
+                              title={playing === filePath ? 'Tạm dừng' : 'Nghe'}
+                            >
+                              <FileAudio size={16} />
+                            </button>
+                            <a
+                              href={getAudioUrl(filePath)}
+                              download={item.name}
+                              className="p-2 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
+                              title="Tải về"
+                            >
+                              <Download size={16} />
+                            </a>
+                          </>
+                        )}
+                        <button
+                          onClick={() => handleDelete(item.name, false)}
+                          disabled={busy}
+                          className="p-2 rounded-lg text-gray-400 hover:text-red-600 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors disabled:opacity-40"
+                          title="Xóa file"
+                        >
+                          <Trash2 size={16} />
+                        </button>
+                      </div>
+                    </>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         </div>
       )}
     </div>

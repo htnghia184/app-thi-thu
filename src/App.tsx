@@ -38,6 +38,7 @@ import { TeacherProfile } from './components/TeacherProfile';
 import { getCurrentUser, getUserProfile, signOut, fetchExams, fetchPublicExams, deleteExam, upsertExam } from './lib/supabaseService';
 import { Loader2, Shield, Headphones } from 'lucide-react';
 import { useDarkMode } from './hooks/useDarkMode';
+import logoBg from '../logo-without-background.png';
 
 type Page = 'dashboard' | 'exam' | 'history' | 'profile';
 
@@ -74,12 +75,16 @@ function App() {
       const perPassage = Math.floor(selectedExam.totalDurationMinutes / n);
       setPassageTimes(new Array(n).fill(perPassage));
       setLockedPassages(new Array(n).fill(false));
+      // Reset timer theo duration mới (đặc biệt speaking = tổng các part, không phải 60 mặc định)
+      resetTimer();
     }
   }, [selectedExam?.id, selectedExam?.passages?.length]);
 
   // Writing-specific state
   const [writingAnswers, setWritingAnswers] = useState<Record<number, string>>({});
   const [writingSubmitted, setWritingSubmitted] = useState(false);
+  /** Audio speaking của guest đã upload (chờ gắn vào exam_leads khi để lại thông tin) */
+  const [guestSpeakingAudios, setGuestSpeakingAudios] = useState<any[]>([]);
 
   // Auth check
   useEffect(() => {
@@ -130,8 +135,20 @@ function App() {
     user?.id
   );
 
+  // Speaking: tổng thời gian = Σ (chuẩn bị + ghi âm) của tất cả các part, không dùng duration tổng
+  const speakingTotalMinutes =
+    selectedExam?.skillType === 'speaking'
+      ? selectedExam.passages.reduce(
+          (sum, p) =>
+            sum +
+            (p.prepSeconds && p.prepSeconds > 0 ? p.prepSeconds : 60) +
+            (p.durationSeconds || 0),
+          0
+        ) / 60
+      : null;
+
   const { minutes, seconds, reset: resetTimer } = useTimer(
-    selectedExam?.totalDurationMinutes || 60,
+    (speakingTotalMinutes ?? selectedExam?.totalDurationMinutes) || 60,
     () => {
       if (selectedExam?.skillType === 'writing') {
         setWritingSubmitted(true);
@@ -184,6 +201,7 @@ function App() {
       setSelectedExam(exam);
       setWritingAnswers({});
       setWritingSubmitted(false);
+      setGuestSpeakingAudios([]);
       setPage('exam');
     }
   };
@@ -199,6 +217,7 @@ function App() {
     setSelectedExam(null);
     setWritingAnswers({});
     setWritingSubmitted(false);
+    setGuestSpeakingAudios([]);
     setPage('dashboard');
   };
 
@@ -255,8 +274,9 @@ function App() {
   // Not logged in
   if (!user) {
     return (
-      <div className="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
-        <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-12 max-w-md w-full text-center">
+      <div className="relative h-screen flex items-center justify-center overflow-hidden bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+        <div className="logo-pattern" style={{ backgroundImage: `url(${logoBg})` }} />
+        <div className="relative bg-white dark:bg-gray-800 rounded-2xl shadow-2xl p-12 max-w-md w-full text-center">
           <Shield size={48} className="mx-auto text-indigo-600 mb-4" />
           <h1 className="text-3xl font-bold text-indigo-900 dark:text-gray-100 mb-2">E-Master Online Exam Center</h1>
           <p className="text-gray-600 dark:text-gray-400 mb-8">Sign in to start practicing</p>
@@ -327,6 +347,7 @@ function App() {
         <SpeakingGrading
           user={user}
           userId={user?.id || ''}
+          userRole={userRole}
           onBack={() => setAdminTab('exams')}
         />
       );
@@ -395,6 +416,7 @@ function App() {
           } : null}
           userAnswers={examState.userAnswers}
           writingAnswers={writingAnswers}
+          speakingAudios={guestSpeakingAudios}
           onDone={handleReset}
         />
       );
@@ -642,9 +664,17 @@ function App() {
         {skillType === 'speaking' && (
           <SpeakingView
             passages={selectedExam.passages}
+            examTitle={selectedExam.examTitle}
+            examDescription={selectedExam.description}
             userId={user?.id}
             examId={selectedExam.id}
             onSpeakingSubmit={() => examState.submitExam()}
+            onGuestAudioUploaded={(passageNumber, passageTitle, audioUrl, durationSeconds) => {
+              setGuestSpeakingAudios(prev => [
+                ...prev,
+                { passage_number: passageNumber, passage_title: passageTitle, audio_url: audioUrl, duration_seconds: durationSeconds },
+              ]);
+            }}
           />
         )}
 
