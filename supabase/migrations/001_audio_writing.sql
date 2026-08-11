@@ -1,5 +1,10 @@
 -- ==========================================================
--- E-Master Online Exam Center - Migration 002: Audio + Writing Grading
+-- 001_audio_writing.sql
+-- Audio columns + Writing submissions & grading
+-- (gộp từ migration 002 cũ)
+--
+-- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ → Run.
+-- Chạy sau schema.sql. An toàn khi chạy lại nhiều lần.
 -- ==========================================================
 
 -- 1. Add audio columns to passages table

@@ -1,10 +1,11 @@
 -- ============================================================
--- 006_guest_leads.sql
+-- 005_guest_leads.sql
 -- BẢNG LƯU THÔNG TIN NGƯỜI THI THỬ (GUEST) — NGUỒN POTENTIAL LEAD
 -- Kèm passcode để tra cứu kết quả (sdt + passcode)
+-- (gộp từ migration 006 cũ)
 --
 -- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ file → Run.
--- Chạy sau file 005_guest_public_status.sql. An toàn khi chạy lại nhiều lần.
+-- Chạy sau 004_guest_public_status.sql. An toàn khi chạy lại nhiều lần.
 -- ============================================================
 
 -- ------------------------------------------------------------

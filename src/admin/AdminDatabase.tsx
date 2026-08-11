@@ -163,7 +163,7 @@ const StorageView: React.FC<StorageViewProps> = ({ onBack }) => {
       setItems(data);
     } catch (err: any) {
       console.error('Failed to load storage:', err);
-      setError('Không thể tải storage. Kiểm tra đã chạy migration 013 (storage policies) chưa.');
+      setError('Không thể tải storage. Kiểm tra đã chạy migration 009_guest_speaking_storage.sql (storage policies) chưa.');
     } finally {
       setLoading(false);
     }

@@ -62,7 +62,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
     { label: 'Học viên', value: stats?.students ?? 0, icon: Users, color: 'text-emerald-600 bg-emerald-50', tab: 'students' },
     { label: 'Giáo viên', value: stats?.teachers ?? 0, icon: GraduationCap, color: 'text-purple-600 bg-purple-50', tab: 'teachers' },
     { label: 'Lớp học', value: stats?.classes ?? 0, icon: School, color: 'text-blue-600 bg-blue-50', tab: 'classes' },
-    { label: 'Guest Leads', value: stats?.leads ?? 0, icon: PhoneCall, color: 'text-rose-600 bg-rose-50', tab: 'leads' },
+    { label: 'Guest Leads', value: stats?.leads ?? 0, icon: PhoneCall, color: 'text-rose-600 bg-rose-50', tab: 'guest_grading' },
     { label: 'Cần chấm bài', value: stats?.pending_grading ?? 0, icon: ClipboardList, color: 'text-amber-600 bg-amber-50', tab: 'guest_grading' },
   ];
 
@@ -127,7 +127,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
               Leads mới nhất
             </h3>
             <button
-              onClick={() => onNavigate('leads')}
+              onClick={() => onNavigate('guest_grading')}
               className="text-xs font-semibold text-indigo-600 dark:text-indigo-400 hover:underline"
             >
               Xem tất cả →

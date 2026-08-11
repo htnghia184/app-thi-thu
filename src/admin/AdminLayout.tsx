@@ -1,10 +1,10 @@
 import React from 'react';
 import {
   LogOut, User, Shield, BookOpen, Users, School, GraduationCap,
-  Headphones, PhoneCall, LayoutDashboard, UserCog, ClipboardCheck, Database,
+  Headphones, LayoutDashboard, UserCog, ClipboardCheck, Database, Layers,
 } from 'lucide-react';
 
-type TabType = 'overview' | 'exams' | 'students' | 'classes' | 'profile' | 'grading' | 'speaking_grading' | 'leads' | 'teachers' | 'guest_grading' | 'database';
+type TabType = 'overview' | 'exams' | 'students' | 'classes' | 'profile' | 'grading' | 'speaking_grading' | 'teachers' | 'guest_grading' | 'bundles' | 'database';
 
 interface AdminLayoutProps {
   children: React.ReactNode;
@@ -31,18 +31,17 @@ export const AdminLayout: React.FC<AdminLayoutProps> = ({
     tabs.push({ key: 'grading', label: 'Grade Writing', icon: GraduationCap });
     tabs.push({ key: 'speaking_grading', label: 'Grade Speaking', icon: Headphones });
     tabs.push({ key: 'guest_grading', label: 'Guest Grading', icon: ClipboardCheck });
+    tabs.push({ key: 'bundles', label: 'Bundles', icon: Layers });
   } else {
     tabs.push({ key: 'overview', label: 'Overview', icon: LayoutDashboard });
     tabs.push({ key: 'exams', label: 'Exams', icon: BookOpen });
     tabs.push({ key: 'classes', label: 'Classes', icon: School });
     tabs.push({ key: 'teachers', label: 'Teachers', icon: UserCog });
     tabs.push({ key: 'guest_grading', label: 'Guest Grading', icon: ClipboardCheck });
+    tabs.push({ key: 'bundles', label: 'Bundles', icon: Layers });
     tabs.push({ key: 'database', label: 'Database', icon: Database });
   }
   tabs.push({ key: 'students', label: 'Students', icon: Users });
-  if (!isTeacher) {
-    tabs.push({ key: 'leads', label: 'Leads', icon: PhoneCall });
-  }
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-900">

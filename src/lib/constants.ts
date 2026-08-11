@@ -1,6 +1,6 @@
 import { BookOpen, Headphones, BookMarked } from 'lucide-react';
 
-export interface SkillConfigItem {
+interface SkillConfigItem {
   label: string;
   icon: any;
   color: string;

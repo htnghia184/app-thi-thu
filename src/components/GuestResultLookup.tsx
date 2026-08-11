@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
-import { ArrowLeft, KeyRound, Phone, Search, Loader2, CheckCircle2, MessageSquare } from 'lucide-react';
-import { fetchGuestResult, fetchExamById } from '../lib/supabaseService';
+import { ArrowLeft, KeyRound, Phone, Search, Loader2, CheckCircle2, MessageSquare, Layers, BookOpen, Headphones, BookMarked, Mic } from 'lucide-react';
+import { fetchGuestResult, fetchExamById, fetchGuestSessionResult } from '../lib/supabaseService';
 import { ResultView } from './ResultView';
 import { VstepExamSet } from '../data/vstepReadingMock';
 
@@ -24,6 +24,8 @@ export const GuestResultLookup: React.FC<GuestResultLookupProps> = ({
   const [lead, setLead] = useState<any | null>(null);
   const [exam, setExam] = useState<VstepExamSet | null>(null);
   const [examLoading, setExamLoading] = useState(false);
+  /** Tra cứu theo session (thi thử theo bộ — 1 passcode gom nhiều kỹ năng) */
+  const [sessionResult, setSessionResult] = useState<{ session: any; leads: any[] } | null>(null);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -40,6 +42,15 @@ export const GuestResultLookup: React.FC<GuestResultLookupProps> = ({
 
     setLoading(true);
     try {
+      // Ưu tiên tra cứu theo session (bộ đề — 1 passcode cho toàn bộ kỹ năng)
+      const sessionData = await fetchGuestSessionResult(phone.trim(), passcode.trim().toUpperCase());
+      if (sessionData) {
+        setSessionResult(sessionData);
+        setLead(null);
+        setExam(null);
+        return;
+      }
+
       const result = await fetchGuestResult(phone.trim(), passcode.trim().toUpperCase());
       if (!result) {
         setError('Không tìm thấy kết quả. Vui lòng kiểm tra lại số điện thoại và passcode.');
@@ -85,6 +96,104 @@ export const GuestResultLookup: React.FC<GuestResultLookupProps> = ({
       day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
     });
   };
+
+  const skillBadge: Record<string, { icon: any; label: string; bg: string }> = {
+    reading: { icon: BookOpen, label: 'Reading', bg: 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/30 dark:text-indigo-400' },
+    listening: { icon: Headphones, label: 'Listening', bg: 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' },
+    writing: { icon: BookMarked, label: 'Writing', bg: 'bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400' },
+    speaking: { icon: Mic, label: 'Speaking', bg: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' },
+  };
+
+  // ---- Đã xác minh theo session (bộ đề — nhiều kỹ năng) ----
+  if (sessionResult) {
+    const { session, leads } = sessionResult;
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 py-10 px-4 md:px-8">
+        <div className="max-w-2xl mx-auto">
+          <div className="flex justify-end mb-4">
+            <button onClick={onHome} className="text-indigo-700 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 underline text-sm">
+              Back to Dashboard
+            </button>
+          </div>
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl overflow-hidden">
+            <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-6 md:px-8 py-6 text-white">
+              <div className="flex items-center gap-2 mb-1">
+                <Layers size={20} />
+                <h2 className="text-xl md:text-2xl font-bold">Kết quả bộ thi thử</h2>
+              </div>
+              <p className="text-indigo-100 text-sm">
+                {session.full_name} · {formatDate(session.created_at)}
+              </p>
+            </div>
+            <div className="p-6 md:p-8">
+              <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                Bạn đã hoàn thành <span className="font-semibold">{leads.length}</span> kỹ năng trong bộ.
+                Chi tiết từng kỹ năng:
+              </p>
+
+              {leads.length === 0 ? (
+                <p className="p-6 text-center text-gray-400 dark:text-gray-500 text-sm">
+                  Bộ thi chưa có kết quả kỹ năng nào.
+                </p>
+              ) : (
+                <div className="space-y-3">
+                  {leads.map((l: any) => {
+                    const skill = skillBadge[l.skill_type] || skillBadge.reading;
+                    const Icon = skill.icon;
+                    const hasScore = l.score_vstep != null;
+                    return (
+                      <div key={l.id} className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                        <div className={`p-2 rounded-lg ${skill.bg} flex-shrink-0`}>
+                          <Icon size={18} />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs font-semibold uppercase tracking-wide text-gray-400">{skill.label}</span>
+                            {hasScore ? (
+                              <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-emerald-100 text-emerald-700 dark:bg-emerald-900/30 dark:text-emerald-400">
+                                Đã chấm
+                              </span>
+                            ) : (
+                              <span className="px-2 py-0.5 text-xs font-semibold rounded-full bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400">
+                                Đang chờ chấm
+                              </span>
+                            )}
+                          </div>
+                          <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
+                            {l.exam_title || 'Bài thi'}
+                          </div>
+                          <div className="text-xs text-gray-400">{formatDate(l.created_at)}</div>
+                        </div>
+                        <div className="text-right flex-shrink-0">
+                          {hasScore ? (
+                            <>
+                              <div className="text-xl font-bold text-indigo-600 dark:text-indigo-400">{l.score_vstep}</div>
+                              <div className="text-[10px] text-gray-400">VSTEP · {l.score_raw}/{l.total_questions ?? '-'}</div>
+                            </>
+                          ) : (
+                            <div className="text-xs font-semibold text-amber-600 dark:text-amber-400">
+                              Kết quả gửi qua Zalo
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+
+              <button
+                onClick={onHome}
+                className="mt-6 w-full py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl font-semibold hover:from-indigo-700 hover:to-indigo-800 transition-all"
+              >
+                Về trang chủ
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // ---- Đã xác minh + đang tải đề ----
   if (lead && examLoading) {

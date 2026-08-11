@@ -1,17 +1,29 @@
 -- ============================================================
--- 004_unified_exams.sql
--- Hợp nhất mọi đề thi (cả listening/writing trước đây là mock local)
--- vào bảng exams — admin quản lý chung một chỗ, app chỉ đọc từ DB.
+-- 003_exam_extensions.sql
+-- Mở rộng bảng đề thi + seed Listening/Writing
+-- (gộp từ 004_total_questions.sql + 004_unified_exams.sql cũ)
+--
+-- 1) Mở rộng passages: audio (listening), cấu hình task (writing)
+-- 2) Seed đề Listening Practice Test 1 + Writing Practice Test 1
+--    (trước đây listening/writing là mock local, giờ quản lý chung trong DB)
+-- 3) Thêm total_questions vào exam_results để UI hiện đúng số câu hỏi
+--
+-- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ → Run.
+-- Chạy sau 002_speaking.sql. An toàn khi chạy lại nhiều lần.
 -- ============================================================
 
+-- ------------------------------------------------------------
 -- 1. Mở rộng bảng passages để chứa audio (listening) và cấu hình task (writing)
+-- ------------------------------------------------------------
 ALTER TABLE passages
   ADD COLUMN IF NOT EXISTS audio_url TEXT DEFAULT '',
   ADD COLUMN IF NOT EXISTS task_type TEXT DEFAULT '',
   ADD COLUMN IF NOT EXISTS word_limit INTEGER,
   ADD COLUMN IF NOT EXISTS instructions TEXT DEFAULT '';
 
+-- ------------------------------------------------------------
 -- 2. Seed đề Listening Practice Test 1
+-- ------------------------------------------------------------
 INSERT INTO exams (id, title, description, duration_minutes, skill_type, is_published)
 VALUES (
   '00000000-0000-4000-8000-000000000011',
@@ -115,7 +127,9 @@ INSERT INTO questions (passage_id, question_number, question_text, options, corr
    'Students must register through the university career services website in advance.')
 ON CONFLICT (passage_id, question_number) DO NOTHING;
 
+-- ------------------------------------------------------------
 -- 3. Seed đề Writing Practice Test 1 (mỗi task là một passage)
+-- ------------------------------------------------------------
 INSERT INTO exams (id, title, description, duration_minutes, skill_type, is_published)
 VALUES (
   '00000000-0000-4000-8000-000000000012',
@@ -140,3 +154,21 @@ INSERT INTO passages (id, exam_id, passage_number, title, content, task_type, wo
    'Task 2: Essay', E'Some people believe that social media has a negative impact on society, while others think it brings many benefits.\n\nWrite an essay discussing both views and give your own opinion.\n\nIn your essay, you should:\n- Explain the positive aspects of social media\n- Discuss the negative effects of social media\n- Give your own opinion with supporting reasons\n- Provide examples to support your points',
    'essay', 300, 'Write an essay of about 300 words. You should spend approximately 40 minutes on this task.')
 ON CONFLICT (id) DO NOTHING;
+
+-- ------------------------------------------------------------
+-- 4. total_questions: để UI hiện đúng số câu hỏi thực tế
+--    (thay vì giả định cố định 40 câu)
+-- ------------------------------------------------------------
+ALTER TABLE exam_results ADD COLUMN IF NOT EXISTS total_questions INTEGER;
+
+-- Backfill các dòng cũ bằng số câu hỏi của từng đề
+UPDATE exam_results er
+SET total_questions = sub.total
+FROM (
+  SELECT p.exam_id, COUNT(q.id) AS total
+  FROM passages p
+  JOIN questions q ON q.passage_id = p.id
+  GROUP BY p.exam_id
+) sub
+WHERE er.exam_id = sub.exam_id
+  AND er.total_questions IS NULL;

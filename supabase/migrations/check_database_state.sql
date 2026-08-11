@@ -5,7 +5,7 @@
 --
 -- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ → Run.
 -- Cột "ket_qua": OK = chuẩn, FAIL = cần xử lý trước khi chạy
--- migration 007/008.
+-- migration 006/007.
 -- ============================================================
 
 WITH checks AS (
@@ -14,16 +14,16 @@ WITH checks AS (
          to_regclass('public.profiles') IS NOT NULL AS ok, '' AS chi_tiet
   UNION ALL SELECT 11, '1. Bang exams', to_regclass('public.exams') IS NOT NULL, ''
   UNION ALL SELECT 12, '1. Bang exam_leads', to_regclass('public.exam_leads') IS NOT NULL, ''
-  UNION ALL SELECT 13, '1. Bang writing_submissions', to_regclass('public.writing_submissions') IS NOT NULL, 'Neu FAIL: migration 008 se loi CREATE POLICY. Phai bao lai de sua.'
-  UNION ALL SELECT 14, '1. Bang speaking_submissions', to_regclass('public.speaking_submissions') IS NOT NULL, 'Neu FAIL: migration 008 se loi CREATE POLICY. Phai bao lai de sua.'
+  UNION ALL SELECT 13, '1. Bang writing_submissions', to_regclass('public.writing_submissions') IS NOT NULL, 'Neu FAIL: migration 007 se loi CREATE POLICY. Phai bao lai de sua.'
+  UNION ALL SELECT 14, '1. Bang speaking_submissions', to_regclass('public.speaking_submissions') IS NOT NULL, 'Neu FAIL: migration 007 se loi CREATE POLICY. Phai bao lai de sua.'
   UNION ALL SELECT 15, '1. Bang writing_grades', to_regclass('public.writing_grades') IS NOT NULL, ''
   UNION ALL SELECT 16, '1. Bang speaking_grades', to_regclass('public.speaking_grades') IS NOT NULL, ''
 
-  -- 2. CÁC CỘT CHẤM BÀI TRONG exam_leads (migration 007 đã chạy chưa)
-  UNION ALL SELECT 20, '2. exam_leads.writing_answers', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='exam_leads' AND column_name='writing_answers'), 'Chua chay migration 007.'
-  UNION ALL SELECT 21, '2. exam_leads.assigned_teacher_id', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='exam_leads' AND column_name='assigned_teacher_id'), 'Chua chay migration 007.'
-  UNION ALL SELECT 22, '2. exam_leads.grading_status', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='exam_leads' AND column_name='grading_status'), 'Chua chay migration 007.'
-  UNION ALL SELECT 23, '2. exam_leads.passcode', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='exam_leads' AND column_name='passcode'), 'Chua chay migration 006.'
+  -- 2. CÁC CỘT CHẤM BÀI TRONG exam_leads (migration 006 đã chạy chưa)
+  UNION ALL SELECT 20, '2. exam_leads.writing_answers', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='exam_leads' AND column_name='writing_answers'), 'Chua chay migration 006.'
+  UNION ALL SELECT 21, '2. exam_leads.assigned_teacher_id', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='exam_leads' AND column_name='assigned_teacher_id'), 'Chua chay migration 006.'
+  UNION ALL SELECT 22, '2. exam_leads.grading_status', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='exam_leads' AND column_name='grading_status'), 'Chua chay migration 006.'
+  UNION ALL SELECT 23, '2. exam_leads.passcode', EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='exam_leads' AND column_name='passcode'), 'Chua chay migration 005.'
 
   -- 3. TRIGGER TẠO PROFILE KHI TẠO USER — BẮT BUỘC PHẢI CÓ
   UNION ALL SELECT 30, '3. Trigger auth.on_auth_user_created',

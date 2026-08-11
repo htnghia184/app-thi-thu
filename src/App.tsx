@@ -18,6 +18,7 @@ import { WritingResultView } from './components/WritingResultView';
 import { SpeakingResultView } from './components/SpeakingResultView';
 import { GuestResultView } from './components/GuestResultView';
 import { GuestResultLookup } from './components/GuestResultLookup';
+import { GuestBundleView, BundleSkillResult } from './components/GuestBundleView';
 import { ConfirmSubmitModal } from './components/ConfirmSubmitModal';
 import { StudentDashboard } from './components/StudentDashboard';
 import { ExamHistory } from './components/ExamHistory';
@@ -28,19 +29,19 @@ import { ExamPreview } from './admin/ExamPreview';
 import { AuthModal } from './components/Auth/AuthModal';
 import { AdminStudents } from './admin/AdminStudents';
 import { AdminClasses } from './admin/AdminClasses';
-import { AdminLeads } from './admin/AdminLeads';
 import { AdminOverview } from './admin/AdminOverview';
 import { AdminTeachers } from './admin/AdminTeachers';
 import { AdminGuestGrading } from './admin/AdminGuestGrading';
+import { AdminBundles } from './admin/AdminBundles';
 import { AdminDatabase } from './admin/AdminDatabase';
 import { StudentProfile } from './components/StudentProfile';
 import { TeacherProfile } from './components/TeacherProfile';
-import { getCurrentUser, getUserProfile, signOut, fetchExams, fetchPublicExams, deleteExam, upsertExam } from './lib/supabaseService';
+import { getCurrentUser, getUserProfile, signOut, fetchExams, fetchPublicExams, deleteExam, upsertExam, fetchExamBundles, fetchExamBundleById, createGuestSession, submitGuestResult, generatePasscode, ExamBundle, GuestSession } from './lib/supabaseService';
 import { Loader2, Shield, Headphones } from 'lucide-react';
 import { useDarkMode } from './hooks/useDarkMode';
 import logoBg from '../logo-without-background.png';
 
-type Page = 'dashboard' | 'exam' | 'history' | 'profile';
+type Page = 'dashboard' | 'exam' | 'history' | 'profile' | 'bundle';
 
 function App() {
   const { isDark, toggle: toggleDarkMode } = useDarkMode();
@@ -56,9 +57,14 @@ function App() {
   const [editingExam, setEditingExam] = useState<VstepExamSet | null>(null);
   const [previewingExam, setPreviewingExam] = useState<VstepExamSet | null>(null);
   const [confirmModalOpen, setConfirmModalOpen] = useState(false);
-  const [adminTab, setAdminTab] = useState<'overview' | 'exams' | 'students' | 'classes' | 'grading' | 'speaking_grading' | 'leads' | 'teachers' | 'guest_grading' | 'database'>('overview');
+  const [adminTab, setAdminTab] = useState<'overview' | 'exams' | 'students' | 'classes' | 'grading' | 'speaking_grading' | 'teachers' | 'guest_grading' | 'bundles' | 'database'>('overview');
   const [isTeacherView, setIsTeacherView] = useState(false);
   const [guestLookupOpen, setGuestLookupOpen] = useState(false);
+
+  // Bộ đề thi thử (guest) — 4 kỹ năng gom 1 session / 1 passcode
+  const [bundles, setBundles] = useState<ExamBundle[]>([]);
+  const [selectedBundle, setSelectedBundle] = useState<ExamBundle | null>(null);
+  const [bundleResults, setBundleResults] = useState<BundleSkillResult[]>([]);
 
   // Highlighter state
   const highlighter = useHighlighter();
@@ -129,6 +135,14 @@ function App() {
       loadExams(userRole === 'guest');
     }
   }, [user, userRole, loadExams]);
+
+  // Guest/Student: tải các bộ đề thi thử (guest chỉ thấy public; student thấy public + private)
+  useEffect(() => {
+    if (userRole !== 'guest' && userRole !== 'student') { setBundles([]); return; }
+    fetchExamBundles(userRole === 'guest' ? { guestOnly: true } : undefined)
+      .then(setBundles)
+      .catch(err => console.error('Failed to load exam bundles:', err));
+  }, [userRole]);
 
   const examState = useVstepExamState(
     selectedExam || { id: '', examTitle: '', description: '', skillType: 'reading', totalDurationMinutes: 60, totalQuestions: 0, passages: [], createdAt: '' },
@@ -206,6 +220,60 @@ function App() {
     }
   };
 
+  const handleStartBundle = async (bundleId: string) => {
+    // Ưu tiên tìm trong danh sách bộ đã nạp; nếu không có (VD bộ ẩn được giao cho lớp)
+    // thì tải trực tiếp qua RLS — student trong lớp được giao có quyền đọc.
+    let bundle = bundles.find(b => b.id === bundleId);
+    if (!bundle) {
+      try {
+        bundle = (await fetchExamBundleById(bundleId)) || undefined;
+      } catch (err) {
+        console.error('Failed to fetch assigned bundle:', err);
+      }
+    }
+    if (bundle) {
+      setSelectedBundle(bundle);
+      setBundleResults([]);
+      setSelectedExam(null);
+      setWritingAnswers({});
+      setWritingSubmitted(false);
+      setGuestSpeakingAudios([]);
+      setPage('bundle');
+    }
+  };
+
+  /** Guest kết thúc bộ: tạo session (1 passcode) + gắn toàn bộ leads của các kỹ năng đã thi */
+  const handleBundleFinish = async (info: { fullName: string; phone: string; email: string }) => {
+    if (!selectedBundle) return;
+    const newPasscode = generatePasscode();
+    const session: GuestSession = await createGuestSession({
+      full_name: info.fullName,
+      phone: info.phone,
+      email: info.email,
+      passcode: newPasscode,
+      bundle_id: selectedBundle.id,
+    });
+    for (const r of bundleResults) {
+      await submitGuestResult({
+        exam_id: r.examId,
+        exam_title: r.examTitle,
+        skill_type: r.skillType,
+        full_name: info.fullName,
+        phone: info.phone,
+        email: info.email,
+        passcode: newPasscode,
+        session_id: session.id,
+        score_raw: r.correctCount,
+        score_vstep: r.score,
+        total_questions: r.totalCount,
+        time_spent_seconds: r.timeTaken,
+        user_answers: r.userAnswers,
+        writing_answers: r.writingAnswers,
+        speaking_audio: r.speakingAudios,
+      });
+    }
+  };
+
   const handleBackToDashboard = () => {
     setSelectedExam(null);
     setPage('dashboard');
@@ -218,6 +286,8 @@ function App() {
     setWritingAnswers({});
     setWritingSubmitted(false);
     setGuestSpeakingAudios([]);
+    setSelectedBundle(null);
+    setBundleResults([]);
     setPage('dashboard');
   };
 
@@ -254,6 +324,40 @@ function App() {
   const skillType = selectedExam?.skillType || 'reading';
   const [mobileReadingTab, setMobileReadingTab] = useState<'passage' | 'questions'>('passage');
   const answeredCount = Object.values(examState.userAnswers).filter(a => a !== null && a !== undefined).length;
+
+  // Bundle (guest/student): khi nộp xong 1 kỹ năng → ghi nhận kết quả & quay về màn bộ
+  useEffect(() => {
+    if (!(selectedBundle && selectedExam)) return;
+    const guestDone = skillType === 'writing' ? writingSubmitted : examState.isCompleted;
+    if (!guestDone) return;
+    if (bundleResults.some(r => r.examId === selectedExam.id)) return;
+
+    const hasAutoScore = skillType !== 'writing' && skillType !== 'speaking';
+    const results = hasAutoScore ? examState.calculateResults() : null;
+    const skillResult: BundleSkillResult = {
+      examId: selectedExam.id,
+      examTitle: selectedExam.examTitle,
+      skillType,
+      score: results ? results.vstepScore : null,
+      correctCount: results ? results.correctCount : null,
+      totalCount: results ? results.totalCount : null,
+      timeTaken: results ? results.timeTaken : null,
+      userAnswers: Object.keys(examState.userAnswers).length > 0 ? { ...examState.userAnswers } : null,
+      writingAnswers: writingAnswers && Object.keys(writingAnswers).length > 0 ? { ...writingAnswers } : null,
+      speakingAudios: guestSpeakingAudios.length > 0 ? [...guestSpeakingAudios] : null,
+      submittedAt: Date.now(),
+    };
+    setBundleResults(prev => [...prev, skillResult]);
+    // Reset trạng thái đề để quay về màn chọn kỹ năng của bộ
+    examState.resetExam();
+    resetTimer();
+    setWritingAnswers({});
+    setWritingSubmitted(false);
+    setGuestSpeakingAudios([]);
+    setConfirmModalOpen(false);
+    setSelectedExam(null);
+    setPage('bundle');
+  }, [selectedBundle, selectedExam, skillType, writingSubmitted, examState.isCompleted, bundleResults, examState, writingAnswers, guestSpeakingAudios, resetTimer]);
 
   // Số thứ tự câu hỏi bắt đầu của passage tại index — để QuestionList đánh số liên tục khớp QuestionMap
   const passageStartNumber = (index: number) =>
@@ -383,10 +487,10 @@ function App() {
           <AdminTeachers onNavigate={(tab) => setAdminTab(tab as any)} />
         ) : adminTab === 'guest_grading' ? (
           <AdminGuestGrading userId={user?.id || ''} viewMode={isTeacherView ? 'teacher' : 'admin'} />
+        ) : adminTab === 'bundles' ? (
+          <AdminBundles viewMode={isTeacherView ? 'teacher' : 'admin'} />
         ) : adminTab === 'database' && !isTeacherView ? (
           <AdminDatabase />
-        ) : adminTab === 'leads' && !isTeacherView ? (
-          <AdminLeads />
         ) : null}
       </AdminLayout>
     );
@@ -395,6 +499,34 @@ function App() {
   // Exam History page
   if (page === 'history' && userRole !== 'guest') {
     return <ExamHistory userId={user.id} onBack={handleBackToDashboard} />;
+  }
+
+  // Màn hình thi thử theo bộ (guest/student: chọn kỹ năng → thi → kết thúc)
+  if (page === 'bundle' && selectedBundle) {
+    return (
+      <GuestBundleView
+        bundle={selectedBundle}
+        exams={exams}
+        results={bundleResults}
+        isGuest={userRole === 'guest'}
+        onStartSkill={handleStartExam}
+        onFinish={handleBundleFinish}
+        onBack={() => { setSelectedBundle(null); setBundleResults([]); setPage('dashboard'); }}
+        onHome={() => { setSelectedBundle(null); setBundleResults([]); setPage('dashboard'); }}
+      />
+    );
+  }
+
+  // Đang thi theo bộ (guest/student): vừa nộp xong 1 kỹ năng → effect ghi nhận & quay về màn bộ
+  if (page === 'exam' && selectedExam && selectedBundle) {
+    const bundleDone = skillType === 'writing' ? writingSubmitted : examState.isCompleted;
+    if (bundleDone) {
+      return (
+        <div className="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+          <Loader2 size={40} className="animate-spin text-indigo-600" />
+        </div>
+      );
+    }
   }
 
   // Guest: hoàn thành bài → không hiện điểm ngay, để lại thông tin nhận kết quả
@@ -491,13 +623,7 @@ function App() {
           currentPassageIndex={examState.currentPassageIndex}
           totalPassages={selectedExam.passages.length}
           onSelectPassage={examState.selectPassage}
-          onSubmitClick={() => {
-            if (skillType === 'writing') {
-              setConfirmModalOpen(true);
-            } else {
-              setConfirmModalOpen(true);
-            }
-          }}
+          onSubmitClick={() => setConfirmModalOpen(true)}
           onBackToDashboard={handleBackToDashboard}
           bookmarkedCount={examState.getBookmarkedCount()}
         />
@@ -709,6 +835,8 @@ function App() {
       user={user}
       userRole={userRole}
       exams={exams}
+      bundles={bundles}
+      onStartBundle={handleStartBundle}
       onStartExam={handleStartExam}
       onViewHistory={() => setPage('history')}
       onViewProfile={() => setPage('profile')}

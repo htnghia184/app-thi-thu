@@ -1,6 +1,7 @@
 -- ============================================================
--- 007_guest_grading.sql
+-- 006_guest_grading.sql
 -- GÁN GIÁO VIÊN CHẤM BÀI CHO GUEST LEADS (WRITING/SPEAKING)
+-- (gộp từ migration 007 cũ)
 --
 -- Bổ sung cho bảng exam_leads:
 --   + writing_answers   : nội dung bài viết của guest (JSONB: {task_id: text})
@@ -9,7 +10,7 @@
 --   + grade_score, grade_feedback, graded_by, graded_at
 --
 -- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ file → Run.
--- Chạy sau file 006_guest_leads.sql. An toàn khi chạy lại nhiều lần.
+-- Chạy sau 005_guest_leads.sql. An toàn khi chạy lại nhiều lần.
 -- ============================================================
 
 -- ------------------------------------------------------------

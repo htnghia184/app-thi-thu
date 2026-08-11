@@ -173,12 +173,6 @@ export function useVstepExamState(exam: VstepExamSet, userId?: string) {
     return { correctCount, totalCount: allQuestions.length, percentage, vstepScore, timeTaken, results };
   }, [userAnswers, allQuestions, startTime, endTime]);
 
-  const getQuestionStatus = useCallback((questionId: number) => {
-    return userAnswers[questionId] !== null && userAnswers[questionId] !== undefined
-      ? 'answered'
-      : 'unanswered';
-  }, [userAnswers]);
-
   return {
     currentPassageIndex,
     userAnswers,
@@ -194,6 +188,5 @@ export function useVstepExamState(exam: VstepExamSet, userId?: string) {
     submitExam,
     resetExam,
     calculateResults,
-    getQuestionStatus,
   };
 }

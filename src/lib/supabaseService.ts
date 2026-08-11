@@ -1,5 +1,6 @@
 import { supabase } from './supabaseClient';
 import { VstepExamSet, Passage, Question, WritingTask } from '../data/vstepReadingMock';
+import { sendResultNotification } from './notifications';
 
 // ==================== Auth & Profile ====================
 
@@ -384,13 +385,55 @@ export async function fetchUserExamResults(userId: string) {
     .from('exam_results')
     .select(`
       *,
-      exams:exam_id ( title )
+      exams:exam_id ( title, skill_type )
     `)
     .eq('user_id', userId)
     .order('submitted_at', { ascending: false });
 
   if (error) throw error;
   return data;
+}
+
+// Lịch sử bài viết của học viên (kèm điểm nếu đã chấm)
+export async function fetchUserWritingSubmissions(userId: string) {
+  const { data, error } = await supabase
+    .from('writing_submissions')
+    .select(`
+      *,
+      exams:exam_id ( title, skill_type ),
+      writing_grades ( score, feedback, graded_at, is_ai )
+    `)
+    .eq('user_id', userId)
+    .order('submitted_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []).map((s: any) => ({
+    ...s,
+    grade: s.writing_grades?.[0] || null,
+    exam_title: s.exams?.title,
+    skill_type: s.exams?.skill_type,
+  }));
+}
+
+// Lịch sử bài nói của học viên (kèm điểm nếu đã chấm)
+export async function fetchUserSpeakingSubmissions(userId: string) {
+  const { data, error } = await supabase
+    .from('speaking_submissions')
+    .select(`
+      *,
+      exams:exam_id ( title, skill_type ),
+      speaking_grades ( score, feedback, graded_at, is_ai )
+    `)
+    .eq('user_id', userId)
+    .order('submitted_at', { ascending: false });
+
+  if (error) throw error;
+  return (data || []).map((s: any) => ({
+    ...s,
+    grade: s.speaking_grades?.[0] || null,
+    exam_title: s.exams?.title,
+    skill_type: s.exams?.skill_type,
+  }));
 }
 
 // ==================== Admin - Student Management ====================
@@ -807,7 +850,7 @@ export async function removeStudentFromClass(classId: string, studentId: string)
 /**
  * Fetch student IDs by teacher (students in all of teacher's classes)
  */
-export async function fetchTeacherStudentIds(teacherId: string): Promise<string[]> {
+async function fetchTeacherStudentIds(teacherId: string): Promise<string[]> {
   const { data: ctData, error: ctError } = await supabase
     .from('class_teachers')
     .select('class_id')
@@ -1402,35 +1445,6 @@ export async function fetchSpeakingSubmissions(params?: {
   return submissions;
 }
 
-export async function fetchSpeakingSubmissionById(submissionId: string): Promise<any> {
-  const { data, error } = await supabase
-    .from('speaking_submissions')
-    .select(`
-      *,
-      profiles:user_id ( full_name, email ),
-      exams:exam_id ( title )
-    `)
-    .eq('id', submissionId)
-    .single();
-
-  if (error) throw error;
-  if (!data) return null;
-
-  // Fetch grade if exists
-  const { data: gradeData } = await supabase
-    .from('speaking_grades')
-    .select('*')
-    .eq('submission_id', submissionId)
-    .maybeSingle();
-
-  return {
-    ...data,
-    user_name: data.profiles?.full_name || data.profiles?.email || 'Unknown',
-    exam_title: data.exams?.title || 'Unknown Exam',
-    grade: gradeData || null,
-  };
-}
-
 export async function submitSpeakingGrade(
   submissionId: string,
   graderId: string,
@@ -1556,35 +1570,6 @@ export async function fetchWritingSubmissions(params?: {
   }
 
   return submissions;
-}
-
-export async function fetchWritingSubmissionById(submissionId: string): Promise<any> {
-  const { data, error } = await supabase
-    .from('writing_submissions')
-    .select(`
-      *,
-      profiles:user_id ( full_name, email ),
-      exams:exam_id ( title )
-    `)
-    .eq('id', submissionId)
-    .single();
-
-  if (error) throw error;
-  if (!data) return null;
-
-  // Fetch grade if exists
-  const { data: gradeData } = await supabase
-    .from('writing_grades')
-    .select('*')
-    .eq('submission_id', submissionId)
-    .maybeSingle();
-
-  return {
-    ...data,
-    user_name: data.profiles?.full_name || data.profiles?.email || 'Unknown',
-    exam_title: data.exams?.title || 'Unknown Exam',
-    grade: gradeData || null,
-  };
 }
 
 export async function submitWritingGrade(
@@ -1734,7 +1719,7 @@ export async function aiGradeWriting(
 // Guest Leads — dữ liệu thi thử miễn phí để tìm potential lead
 // ============================================================
 
-export interface GuestLeadResult {
+interface GuestLeadResult {
   exam_id?: string;
   exam_title?: string;
   skill_type?: string;
@@ -1750,6 +1735,8 @@ export interface GuestLeadResult {
   writing_answers?: Record<string, string> | null;
   /** Audio speaking của guest: [{ passage_number, passage_title, audio_url, duration_seconds }] */
   speaking_audio?: any[] | null;
+  /** Thuộc session thi thử theo bộ (nếu có) — gom nhiều lead vào 1 passcode */
+  session_id?: string;
 }
 
 /**
@@ -1759,6 +1746,15 @@ export interface GuestLeadResult {
 export async function submitGuestResult(payload: GuestLeadResult): Promise<void> {
   const { error } = await supabase.from('exam_leads').insert(payload);
   if (error) throw error;
+
+  // Điểm cắm thông báo kết quả qua Zalo OA (hiện là no-op, xem src/lib/notifications.ts)
+  void sendResultNotification({
+    fullName: payload.full_name,
+    phone: payload.phone,
+    passcode: payload.passcode,
+    examTitle: payload.exam_title,
+    scoreVstep: payload.score_vstep,
+  });
 }
 
 /**
@@ -1810,6 +1806,288 @@ export async function fetchGuestResult(phone: string, passcode: string): Promise
   });
   if (error) throw error;
   return (Array.isArray(data) && data.length > 0) ? data[0] : null;
+}
+
+// ============================================================
+// Exam Bundles & Guest Sessions — thi thử theo bộ (4 kỹ năng / 1 passcode)
+// ============================================================
+
+export interface ExamBundle {
+  id: string;
+  title: string;
+  description: string;
+  exam_ids: string[];
+  /** 'public' = mọi người | 'private' = chỉ student | 'hidden' = ẩn hoàn toàn (chỉ admin) */
+  visibility: 'public' | 'private' | 'hidden';
+  created_by?: string | null;
+  created_at: string;
+}
+
+export interface GuestSession {
+  id: string;
+  full_name: string;
+  phone: string;
+  email?: string;
+  passcode: string;
+  bundle_id?: string | null;
+  created_at: string;
+}
+
+/** Guest: chỉ bộ public. Student: public + private. */
+export async function fetchExamBundles(opts?: { guestOnly?: boolean }): Promise<ExamBundle[]> {
+  let query = supabase.from('exam_bundles').select('*');
+  query = opts?.guestOnly
+    ? query.eq('visibility', 'public')
+    : query.in('visibility', ['public', 'private']);
+  const { data, error } = await query.order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(b => ({ ...b, exam_ids: b.exam_ids || [] }));
+}
+
+/** Admin: toàn bộ bộ đề (kể cả hidden) */
+export async function fetchAllExamBundles(): Promise<ExamBundle[]> {
+  const { data, error } = await supabase
+    .from('exam_bundles')
+    .select('*')
+    .order('created_at', { ascending: false });
+  if (error) throw error;
+  return (data || []).map(b => ({ ...b, exam_ids: b.exam_ids || [] }));
+}
+
+export async function createExamBundle(payload: {
+  title: string;
+  description: string;
+  exam_ids: string[];
+  visibility: 'public' | 'private' | 'hidden';
+  created_by?: string;
+}): Promise<void> {
+  const { error } = await supabase.from('exam_bundles').insert(payload);
+  if (error) throw error;
+}
+
+export async function updateExamBundle(id: string, payload: {
+  title?: string;
+  description?: string;
+  exam_ids?: string[];
+  visibility?: 'public' | 'private' | 'hidden';
+}): Promise<void> {
+  const { error } = await supabase.from('exam_bundles').update(payload).eq('id', id);
+  if (error) throw error;
+}
+
+export async function deleteExamBundle(id: string): Promise<void> {
+  const { error } = await supabase.from('exam_bundles').delete().eq('id', id);
+  if (error) throw error;
+}
+
+/**
+ * Tạo session mới cho guest sau khi nộp xong bộ (1 passcode cho toàn bộ kỹ năng).
+ * Passcode UNIQUE — nếu trùng sẽ tự sinh lại (tối đa 3 lần).
+ */
+export async function createGuestSession(payload: {
+  full_name: string;
+  phone: string;
+  email?: string;
+  passcode: string;
+  bundle_id?: string;
+}): Promise<GuestSession> {
+  for (let attempt = 0; attempt < 3; attempt++) {
+    const { data, error } = await supabase
+      .from('guest_sessions')
+      .insert(payload)
+      .select()
+      .single();
+    if (!error && data) return data as GuestSession;
+    // 23505 = unique_violation (passcode trùng) → sinh lại
+    if ((error as any)?.code !== '23505') throw error;
+    payload = { ...payload, passcode: generatePasscode() };
+  }
+  throw new Error('Không thể tạo passcode duy nhất, vui lòng thử lại.');
+}
+
+/** Tra cứu kết quả cả bộ: trả về session + toàn bộ leads theo sdt + passcode */
+export async function fetchGuestSessionResult(
+  phone: string,
+  passcode: string
+): Promise<{ session: GuestSession; leads: any[] } | null> {
+  const { data, error } = await supabase.rpc('get_guest_session_result', {
+    p_phone: phone,
+    p_passcode: passcode,
+  });
+  if (error) throw error;
+  if (!data || data.length === 0) return null;
+  const row = data[0];
+  return {
+    session: {
+      id: row.session_id,
+      full_name: row.full_name,
+      phone: row.phone,
+      email: row.email || '',
+      passcode: row.passcode,
+      bundle_id: row.bundle_id || null,
+      created_at: row.created_at,
+    },
+    leads: row.leads || [],
+  };
+}
+
+/** Lấy 1 bộ đề theo id (kể cả hidden nếu được phép qua RLS) */
+export async function fetchExamBundleById(bundleId: string): Promise<ExamBundle | null> {
+  const { data, error } = await supabase
+    .from('exam_bundles')
+    .select('*')
+    .eq('id', bundleId)
+    .single();
+  if (error) {
+    if ((error as any)?.code === 'PGRST116') return null; // not found
+    throw error;
+  }
+  if (!data) return null;
+  return {
+    id: data.id,
+    title: data.title,
+    description: data.description || '',
+    exam_ids: data.exam_ids || [],
+    visibility: data.visibility || 'public',
+    created_by: data.created_by || null,
+    created_at: data.created_at,
+  };
+}
+
+// ==================== Bundle Assignments (giao bộ đề cho lớp) ====================
+
+export interface BundleAssignment {
+  id: string;
+  bundle_id: string;
+  class_id: string;
+  title: string;
+  description: string;
+  deadline: string;
+  created_by: string;
+  created_at: string;
+  class_name?: string;
+  bundle?: ExamBundle;
+}
+
+export interface CreateBundleAssignmentPayload {
+  bundle_id: string;
+  class_id: string;
+  title: string;
+  description?: string;
+  deadline: string;
+  created_by: string;
+}
+
+/**
+ * Danh sách các lớp được giao 1 bộ đề (kèm tên lớp) — dùng trong admin
+ */
+export async function fetchBundleAssignments(bundleId: string): Promise<BundleAssignment[]> {
+  const { data, error } = await supabase
+    .from('bundle_assignments')
+    .select(`
+      *,
+      classes:class_id ( name )
+    `)
+    .eq('bundle_id', bundleId)
+    .order('deadline', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map((a: any) => ({
+    id: a.id,
+    bundle_id: a.bundle_id,
+    class_id: a.class_id,
+    title: a.title,
+    description: a.description || '',
+    deadline: a.deadline,
+    created_by: a.created_by,
+    created_at: a.created_at,
+    class_name: a.classes?.name || 'Unknown Class',
+  }));
+}
+
+/**
+ * Giao 1 bộ đề cho 1 lớp (thi giữa kỳ / cuối kỳ)
+ */
+export async function createBundleAssignment(payload: CreateBundleAssignmentPayload): Promise<void> {
+  const { error } = await supabase
+    .from('bundle_assignments')
+    .insert({
+      bundle_id: payload.bundle_id,
+      class_id: payload.class_id,
+      title: payload.title,
+      description: payload.description || '',
+      deadline: payload.deadline,
+      created_by: payload.created_by,
+    });
+
+  if (error) throw error;
+}
+
+/**
+ * Gỡ giao bộ đề cho lớp
+ */
+export async function deleteBundleAssignment(id: string): Promise<void> {
+  const { error } = await supabase
+    .from('bundle_assignments')
+    .delete()
+    .eq('id', id);
+
+  if (error) throw error;
+}
+
+/**
+ * Các bộ đề được giao cho student (qua class) kèm deadline + thông tin bundle
+ */
+export async function fetchStudentBundleAssignments(studentId: string): Promise<BundleAssignment[]> {
+  // Lấy các lớp của student
+  const { data: csData, error: csError } = await supabase
+    .from('class_students')
+    .select('class_id')
+    .eq('student_id', studentId);
+
+  if (csError) throw csError;
+  if (!csData || csData.length === 0) return [];
+
+  const classIds = csData.map(c => c.class_id);
+
+  const { data: classes } = await supabase
+    .from('classes')
+    .select('id, name')
+    .in('id', classIds);
+
+  const classMap = new Map(classes?.map((c: any) => [c.id, c.name]) || []);
+
+  const { data, error } = await supabase
+    .from('bundle_assignments')
+    .select(`
+      *,
+      bundles:bundle_id ( id, title, description, exam_ids, visibility, created_at )
+    `)
+    .in('class_id', classIds)
+    .order('deadline', { ascending: true });
+
+  if (error) throw error;
+  return (data || []).map((a: any) => ({
+    id: a.id,
+    bundle_id: a.bundle_id,
+    class_id: a.class_id,
+    title: a.title,
+    description: a.description || '',
+    deadline: a.deadline,
+    created_by: a.created_by,
+    created_at: a.created_at,
+    class_name: classMap.get(a.class_id) || 'Unknown Class',
+    bundle: a.bundles
+      ? {
+          id: a.bundles.id,
+          title: a.bundles.title,
+          description: a.bundles.description || '',
+          exam_ids: a.bundles.exam_ids || [],
+          visibility: a.bundles.visibility || 'public',
+          created_at: a.bundles.created_at,
+        }
+      : undefined,
+  }));
 }
 
 // ============================================================
@@ -2013,7 +2291,7 @@ export async function fetchAdminStats() {
 }
 
 // ============================================================
-// Admin user management — tạo / xóa tài khoản (migration 008)
+// Admin user management — tạo / xóa tài khoản (migration 007_admin_tools.sql)
 // ============================================================
 
 /**
@@ -2048,7 +2326,7 @@ export async function adminDeleteUser(userId: string): Promise<void> {
 // Admin database browser — xem / xóa / dọn dẹp các bảng
 // ============================================================
 
-export interface AdminTableInfo {
+interface AdminTableInfo {
   name: string;
   label: string;
   deletable: boolean;

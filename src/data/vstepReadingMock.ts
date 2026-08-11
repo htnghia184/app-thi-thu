@@ -65,26 +65,3 @@ export interface VstepExamSet {
   /** Trạng thái công khai của đề thi: 'public' ai cũng làm được (kể cả guest), 'private' chỉ dành cho học viên được giao */
   status?: 'public' | 'private';
 }
-
-export interface WritingSubmission {
-  id: string;
-  user_id: string;
-  exam_id: string;
-  task_id: number;
-  content: string;
-  task_type: string;
-  submitted_at: string;
-  user_name?: string;
-  exam_title?: string;
-}
-
-export interface WritingGrade {
-  id: string;
-  submission_id: string;
-  grader_id: string;
-  score: number;
-  feedback: string;
-  criteria_scores?: any;
-  graded_at: string;
-  is_ai: boolean;
-}

@@ -64,21 +64,8 @@ export function useHighlighter() {
     setHighlights(prev => prev.filter(h => h.passageId !== passageId));
   }, []);
 
-  const getPassageHighlights = useCallback(
-    (passageId: number) => {
-      return highlights
-        .filter(h => h.passageId === passageId)
-        .sort((a, b) => a.startOffset - b.startOffset);
-    },
-    [highlights]
-  );
-
   const toggleHighlightMode = useCallback(() => {
     setIsHighlightMode(prev => !prev);
-  }, []);
-
-  const getColorClass = useCallback((color: HighlightColor) => {
-    return HIGHLIGHT_CLASSES[color];
   }, []);
 
   return {
@@ -90,8 +77,6 @@ export function useHighlighter() {
     addHighlight,
     removeHighlight,
     clearPassageHighlights,
-    getPassageHighlights,
-    getColorClass,
   };
 }
 

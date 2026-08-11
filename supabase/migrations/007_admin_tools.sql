@@ -1,6 +1,8 @@
 -- ============================================================
--- 008_admin_tools.sql
+-- 007_admin_tools.sql
 -- CÔNG CỤ QUẢN TRỊ: TẠO / XÓA USER + DỌN DẸP DATABASE
+-- (gộp từ 008_admin_tools.sql + 010_admin_user_functions_fix.sql;
+--  migration 009_admin_create_user_fix đã được 010 thay thế hoàn toàn)
 --
 -- 1) Admin được DELETE trên exam_leads, writing_submissions,
 --    speaking_submissions (phục vụ tab Database dọn dẹp dữ liệu)
@@ -9,12 +11,11 @@
 -- 3) Hàm public.admin_delete_user() — admin xóa tài khoản
 --    (cascade xuống profiles, exam_results, ...)
 --
--- LƯU Ý (đã fix theo file 010): không phụ thuộc helper GoTrue
--- auth.admin_create_user / auth.admin_delete_user vì bản Supabase
--- hiện tại KHÔNG có các hàm này. Xem file 010_admin_user_functions_fix.sql.
+-- LƯU Ý: không phụ thuộc helper GoTrue auth.admin_create_user /
+-- auth.admin_delete_user vì bản Supabase hiện tại KHÔNG có các hàm này.
 --
 -- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ file → Run.
--- Chạy SAU file 007_guest_grading.sql. An toàn khi chạy lại nhiều lần.
+-- Chạy SAU 006_guest_grading.sql. An toàn khi chạy lại nhiều lần.
 -- ============================================================
 
 -- ------------------------------------------------------------
@@ -34,8 +35,8 @@ CREATE POLICY "Admins can delete speaking submissions" ON speaking_submissions
 
 -- ------------------------------------------------------------
 -- 2. Hàm tạo tài khoản (student / teacher) — chỉ admin gọi được.
---    Trả về UUID user vừa tạo.
---    Trigger handle_new_user sẽ tự tạo bản ghi profiles kèm role.
+--    Ưu tiên helper GoTrue nếu bản Supabase có, không có thì
+--    INSERT thủ công auth.users + auth.identities.
 -- ------------------------------------------------------------
 CREATE OR REPLACE FUNCTION public.admin_create_user(
   p_email TEXT,
@@ -63,8 +64,6 @@ BEGIN
     RAISE EXCEPTION 'Mat khau phai tu 6 ky tu tro len';
   END IF;
 
-  -- Tạo user trong auth.users + auth.identities.
-  -- email_confirm = TRUE: user đăng nhập được ngay, không cần xác nhận mail.
   BEGIN
     -- Ưu tiên helper GoTrue nếu bản Supabase có
     IF to_regprocedure('auth.admin_create_user(jsonb, text, text, text, boolean, boolean)') IS NOT NULL THEN
@@ -110,8 +109,8 @@ BEGIN
       RAISE EXCEPTION 'Khong du quyen thao tac tren auth schema';
   END;
 
-  -- LƯU Ý: trigger handle_new_user chỉ đọc raw_user_meta_data (không
-  -- đọc được full_name/role từ app_metadata), nên phải tự đảm bảo
+  -- FIX QUAN TRỌNG: trigger handle_new_user chỉ đọc raw_user_meta_data
+  -- (không đọc được full_name/role từ app_metadata), nên phải tự đảm bảo
   -- profile đúng full_name + role. INSERT mới nếu chưa có, UPDATE lại
   -- nếu trigger đã tạo profile trước đó (role mặc định student).
   INSERT INTO public.profiles (id, email, full_name, role)

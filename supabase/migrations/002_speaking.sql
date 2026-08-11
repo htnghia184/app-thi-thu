@@ -1,5 +1,10 @@
 -- ==========================================================
--- E-Master Online Exam Center - Migration 003: Speaking Submissions & Grading
+-- 002_speaking.sql
+-- Speaking submissions & grading
+-- (gộp từ migration 003 cũ)
+--
+-- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ → Run.
+-- Chạy sau 001_audio_writing.sql. An toàn khi chạy lại nhiều lần.
 -- ==========================================================
 
 -- 1. Speaking submissions table

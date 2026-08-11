@@ -1,8 +1,10 @@
 -- ============================================================
--- 005_guest_public_status.sql
+-- 004_guest_public_status.sql
 -- THÊM: role guest + trạng thái public/private cho đề thi
+-- (gộp từ migration 005 cũ)
+--
 -- Cách dùng: mở Supabase Dashboard → SQL Editor → dán toàn bộ file này → Run.
--- (Có thể chạy lại an toàn nhiều lần)
+-- Chạy sau 003_exam_extensions.sql. An toàn khi chạy lại nhiều lần.
 -- ============================================================
 
 -- ------------------------------------------------------------

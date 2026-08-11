@@ -8,6 +8,7 @@ import {
   fetchGuestLeadsForGrading, fetchTeachers, assignTeacherToLead,
   submitGuestLeadGrade, getAudioUrl,
 } from '../lib/supabaseService';
+import { formatDateTime, formatTime, statusLabel, statusBadge, skillBadge } from '../utils/format';
 
 interface AdminGuestGradingProps {
   userId: string;
@@ -44,7 +45,7 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
       }
     } catch (err: any) {
       console.error('Failed to load guest leads for grading:', err);
-      setError('Không thể tải danh sách bài cần chấm. Kiểm tra đã chạy migration 007_guest_grading.sql.');
+      setError('Không thể tải danh sách bài cần chấm. Kiểm tra đã chạy migration 006_guest_grading.sql.');
     } finally {
       setLoading(false);
     }
@@ -74,45 +75,6 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
     graded: leads.filter(l => l.grading_status === 'graded').length,
   }), [leads]);
 
-  const formatDate = (d?: string) => {
-    if (!d) return '-';
-    return new Date(d).toLocaleString('vi-VN', {
-      day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-    });
-  };
-
-  const statusBadge = (status?: string) => {
-    const map: Record<string, string> = {
-      unassigned: 'bg-gray-100 dark:bg-gray-700 text-gray-600 dark:text-gray-300',
-      assigned: 'bg-amber-100 dark:bg-amber-900/30 text-amber-700 dark:text-amber-300',
-      graded: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
-    };
-    const label: Record<string, string> = {
-      unassigned: 'Chưa gán',
-      assigned: 'Đã gán',
-      graded: 'Đã chấm',
-    };
-    return (
-      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold ${map[status || 'unassigned']}`}>
-        {label[status || 'unassigned']}
-      </span>
-    );
-  };
-
-  const skillBadge = (skill?: string) => {
-    const map: Record<string, string> = {
-      reading: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-      listening: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
-      writing: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
-      speaking: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
-    };
-    return (
-      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${map[skill || 'reading']}`}>
-        {skill || '-'}
-      </span>
-    );
-  };
-
   const handleAssign = async (leadId: string, teacherId: string) => {
     setSaving(true);
     try {
@@ -135,7 +97,7 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
           </h2>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {isAdmin
-              ? 'Gán giáo viên chấm bài viết / nói cho guest và theo dõi tiến độ.'
+              ? 'Danh sách guest thi thử (nguồn lead) — gán giáo viên chấm bài viết / nói và theo dõi tiến độ.'
               : 'Các bài thi thử của guest được admin giao cho bạn chấm.'}
           </p>
         </div>
@@ -232,11 +194,14 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
       ) : (
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg overflow-hidden">
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1100px]">
+            <table className="w-full min-w-[1300px]">
               <thead>
                 <tr className="border-b border-gray-200 dark:border-gray-700 bg-gray-50 dark:bg-gray-900/50">
                   <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">#</th>
                   <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Khách hàng</th>
+                  {isAdmin && (
+                    <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Passcode</th>
+                  )}
                   <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Đề thi</th>
                   <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Kỹ năng</th>
                   <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Trạng thái</th>
@@ -244,6 +209,7 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
                     <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Giáo viên chấm</th>
                   )}
                   <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Điểm</th>
+                  <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Thời gian</th>
                   <th className="text-left py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Ngày</th>
                   <th className="text-right py-3 px-4 text-indigo-900 dark:text-gray-100 font-semibold text-sm">Hành động</th>
                 </tr>
@@ -260,11 +226,28 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
                         <div className="min-w-0">
                           <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{lead.full_name}</div>
                           <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                            <Phone size={10} /> {lead.phone}
+                            <Phone size={10} />
+                            <a href={`tel:${lead.phone}`} className="hover:text-indigo-600 dark:hover:text-indigo-400">{lead.phone}</a>
                           </div>
+                          {lead.email && (
+                            <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1 truncate">
+                              <Mail size={10} /> {lead.email}
+                            </div>
+                          )}
                         </div>
                       </div>
                     </td>
+                    {isAdmin && (
+                      <td className="py-3 px-4">
+                        {lead.passcode ? (
+                          <span className="inline-flex px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-mono font-semibold tracking-wider">
+                            {lead.passcode}
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">-</span>
+                        )}
+                      </td>
+                    )}
                     <td className="py-3 px-4">
                       <div className="text-sm text-gray-700 dark:text-gray-300 max-w-[180px] truncate flex items-center gap-1.5">
                         <FileText size={13} className="text-gray-400 flex-shrink-0" />
@@ -305,7 +288,8 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
                         <span className="text-xs text-gray-400">-</span>
                       )}
                     </td>
-                    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDate(lead.created_at)}</td>
+                    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatTime(lead.time_spent_seconds)}</td>
+                    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDateTime(lead.created_at)}</td>
                     <td className="py-3 px-4 text-right">
                       <button
                         onClick={() => setSelectedLead(lead)}
@@ -631,38 +615,3 @@ const GradeModal: React.FC<GradeModalProps> = ({
   );
 };
 
-// ==================== helpers ====================
-
-const statusLabel = (status?: string) => {
-  const map: Record<string, string> = {
-    unassigned: 'Chưa gán', assigned: 'Đã gán', graded: 'Đã chấm',
-  };
-  return map[status || 'unassigned'];
-};
-
-const skillBadge = (skill?: string) => {
-  const map: Record<string, string> = {
-    reading: 'bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-300',
-    listening: 'bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-300',
-    writing: 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300',
-    speaking: 'bg-rose-100 dark:bg-rose-900/30 text-rose-700 dark:text-rose-300',
-  };
-  return (
-    <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-semibold capitalize ${map[skill || 'reading']}`}>
-      {skill || '-'}
-    </span>
-  );
-};
-
-const formatDateTime = (d?: string) => {
-  if (!d) return '-';
-  return new Date(d).toLocaleString('vi-VN', {
-    day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-};
-
-const formatTime = (s?: number | null) => {
-  if (!s && s !== 0) return '-';
-  const m = Math.floor(s / 60);
-  return `${m}m ${s % 60}s`;
-};

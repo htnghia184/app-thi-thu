@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from 'react';
 import { VstepExamSet } from '../data/vstepReadingMock';
-import { fetchUserExamResults, fetchStudentAssignments, Assignment } from '../lib/supabaseService';
-import { FileText, Clock, BarChart3, History, LogOut, User, Shield, Trophy, Loader2, Headphones, BookOpen, BookMarked, Calendar, Bell, BellRing, Moon, Sun, Mic, AlertTriangle } from 'lucide-react';
+import { fetchUserExamResults, fetchStudentAssignments, fetchStudentBundleAssignments, Assignment, ExamBundle, BundleAssignment } from '../lib/supabaseService';
+import { FileText, Clock, BarChart3, History, LogOut, User, Shield, Trophy, Loader2, Headphones, BookOpen, BookMarked, Calendar, Bell, BellRing, Moon, Sun, Mic, AlertTriangle, Layers } from 'lucide-react';
 interface StudentDashboardProps {
   user: any;
   userRole: string | null;
   exams: VstepExamSet[];
+  /** Bộ đề thi thử (guest) — gom nhiều kỹ năng vào 1 passcode */
+  bundles?: ExamBundle[];
+  onStartBundle?: (bundleId: string) => void;
   onStartExam: (examId: string) => void;
   onViewHistory: () => void;
   onViewProfile: () => void;
@@ -95,6 +98,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   user,
   userRole,
   exams,
+  bundles = [],
+  onStartBundle,
   onStartExam,
   onViewHistory,
   onViewProfile,
@@ -109,6 +114,8 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   const [skillFilter, setSkillFilter] = useState<SkillFilter>('all');
   const [assignments, setAssignments] = useState<(Assignment & { class_name?: string })[]>([]);
   const [assignmentsLoading, setAssignmentsLoading] = useState(true);
+  const [bundleAssignments, setBundleAssignments] = useState<BundleAssignment[]>([]);
+  const [bundleAssignmentsLoading, setBundleAssignmentsLoading] = useState(true);
   const [showNotifications, setShowNotifications] = useState(false);
   const [readNotificationIds, setReadNotificationIds] = useState<Set<string>>(new Set());
 
@@ -206,16 +213,22 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
   useEffect(() => {
     if (isGuest) {
       setAssignmentsLoading(false);
+      setBundleAssignmentsLoading(false);
       return;
     }
     const loadAssignments = async () => {
       try {
-        const data = await fetchStudentAssignments(user.id);
+        const [data, bundleData] = await Promise.all([
+          fetchStudentAssignments(user.id),
+          fetchStudentBundleAssignments(user.id),
+        ]);
         setAssignments(data || []);
+        setBundleAssignments(bundleData || []);
       } catch (err) {
         console.error('Failed to load assignments:', err);
       } finally {
         setAssignmentsLoading(false);
+        setBundleAssignmentsLoading(false);
       }
     };
     loadAssignments();
@@ -464,6 +477,114 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
         {/* Weakness Analysis */}
         {recentResults.length >= 2 && (
           <PerformanceBySkill results={recentResults} exams={exams} />
+        )}
+
+        {/* Bộ đề được giao (thi giữa kỳ / cuối kỳ) */}
+        {!isGuest && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-1.5 rounded-lg bg-gradient-to-r from-emerald-500 to-teal-600 text-white">
+                <Layers size={16} />
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-indigo-900 dark:text-gray-100">
+                Bài thi được giao
+              </h3>
+              <span className="text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-2.5 py-1 rounded-full shadow-sm">
+                Thi giữa kỳ · cuối kỳ · theo lớp
+              </span>
+            </div>
+            {bundleAssignmentsLoading ? (
+              <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-6 flex justify-center">
+                <Loader2 size={22} className="animate-spin text-emerald-600" />
+              </div>
+            ) : bundleAssignments.length === 0 ? (
+              <p className="text-sm text-gray-400 dark:text-gray-500">Chưa có bộ đề nào được giao cho lớp của bạn.</p>
+            ) : (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                {bundleAssignments.map(a => (
+                  <button
+                    key={a.id}
+                    onClick={() => a.bundle && onStartBundle?.(a.bundle_id)}
+                    disabled={!a.bundle}
+                    className={`text-left bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-5 border-2 border-emerald-200 dark:border-emerald-900/50 hover:border-emerald-400 dark:hover:border-emerald-600 transition-all ${
+                      a.bundle ? 'hover:shadow-xl hover:scale-[1.01]' : 'opacity-60 cursor-not-allowed'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between gap-2 mb-2">
+                      <h4 className="text-base md:text-lg font-bold text-indigo-900 dark:text-gray-100">{a.title}</h4>
+                      {getDeadlineBadge(a.deadline)}
+                    </div>
+                    {a.bundle?.title && (
+                      <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
+                        <Layers size={13} className="inline mr-1 text-emerald-500" />
+                        {a.bundle.title}
+                      </p>
+                    )}
+                    <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400 flex-wrap">
+                      {a.class_name && (
+                        <span className="flex items-center gap-1">
+                          <Calendar size={12} /> {a.class_name}
+                        </span>
+                      )}
+                      <span className="flex items-center gap-1">
+                        <Clock size={12} /> Hạn: {formatDeadline(a.deadline)}
+                      </span>
+                      <span className="flex items-center gap-1 ml-auto text-emerald-600 dark:text-emerald-400 font-semibold">
+                        Vào thi →
+                      </span>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Bộ đề thi thử — gom nhiều kỹ năng */}
+        {bundles.length > 0 && (
+          <div className="mb-8">
+            <div className="flex items-center gap-2 mb-4">
+              <div className="p-1.5 rounded-lg bg-gradient-to-r from-indigo-500 to-purple-600 text-white">
+                <Layers size={16} />
+              </div>
+              <h3 className="text-lg md:text-xl font-bold text-indigo-900 dark:text-gray-100">
+                Thi thử theo bộ
+              </h3>
+              <span className="text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-800 px-2.5 py-1 rounded-full shadow-sm">
+                {isGuest ? 'Nhiều kỹ năng · 1 passcode duy nhất' : 'Nhiều kỹ năng · lưu kết quả vào tài khoản'}
+              </span>
+            </div>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {bundles.map(b => {
+                const skillCount = exams.filter(e => b.exam_ids.includes(e.id)).length;
+                return (
+                  <button
+                    key={b.id}
+                    onClick={() => onStartBundle?.(b.id)}
+                    className="text-left bg-gradient-to-r from-indigo-600 to-purple-600 rounded-xl shadow-lg p-5 md:p-6 text-white hover:shadow-xl hover:scale-[1.01] transition-all"
+                  >
+                    <div className="flex items-center justify-between mb-2">
+                      <h4 className="text-base md:text-lg font-bold">{b.title}</h4>
+                      <Layers size={20} className="text-indigo-200" />
+                    </div>
+                    {b.description && (
+                      <p className="text-indigo-100 text-xs md:text-sm mb-3 line-clamp-2">{b.description}</p>
+                    )}
+                    <div className="flex items-center gap-3 text-indigo-100 text-xs flex-wrap">
+                      <span className="bg-white/20 px-2 py-0.5 rounded-full font-semibold">
+                        {skillCount} kỹ năng
+                      </span>
+                      <span>
+                        {isGuest
+                          ? 'Thi vài kỹ năng hoặc tất cả · kết thúc nhận 1 passcode'
+                          : 'Thi vài kỹ năng hoặc tất cả · kết quả lưu vào tài khoản'}
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
+          </div>
         )}
 
         {/* Skill Filter Tabs */}

@@ -1,13 +1,15 @@
 -- ============================================================
--- 013_guest_speaking_storage.sql
+-- 009_guest_speaking_storage.sql
 -- 1) Cho phép guest (không tài khoản) LƯU ĐƯỢC bài Speaking:
 --    - Cột speaking_audio (JSONB) trên exam_leads — giống writing_answers,
 --      teacher/admin chấm ở tab Guest Grading.
 --    - Storage policy cho anon upload audio lên bucket exam-audio (path guest/...).
 -- 2) Storage policies cho ADMIN quản lý storage ở tab Database:
 --    - List/xem file (SELECT public) + xóa file.
+-- (gộp từ migration 013 cũ)
 --
 -- Cách dùng: Supabase Dashboard → SQL Editor → dán toàn bộ → Run.
+-- Chạy sau 008_passage_timing.sql. An toàn khi chạy lại nhiều lần.
 -- ============================================================
 
 -- 1. Cột lưu audio speaking của guest (mỗi phần là 1 object trong mảng JSON)

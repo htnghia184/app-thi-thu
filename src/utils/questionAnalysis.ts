@@ -1,6 +1,6 @@
 import { Question, QuestionType, QUESTION_TYPE_LABELS } from '../data/vstepReadingMock';
 
-export interface QuestionTypeStats {
+interface QuestionTypeStats {
   type: QuestionType;
   label: string;
   correct: number;
@@ -8,7 +8,7 @@ export interface QuestionTypeStats {
   accuracy: number;
 }
 
-export interface WeakArea {
+interface WeakArea {
   type: QuestionType;
   label: string;
   correct: number;
@@ -52,7 +52,7 @@ export function analyzeByQuestionType(
 /**
  * Find the weakest question type(s)
  */
-export function findWeakestAreas(stats: QuestionTypeStats[]): WeakArea[] {
+function findWeakestAreas(stats: QuestionTypeStats[]): WeakArea[] {
   if (stats.length === 0) return [];
 
   const lowestAccuracy = stats[0].accuracy;
