@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
+import { Search, X } from 'lucide-react';
 import { VstepExamSet } from '../data/vstepReadingMock';
 
 interface ExamListProps {
@@ -10,6 +11,26 @@ interface ExamListProps {
 }
 
 export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, onDelete }) => {
+  const [search, setSearch] = useState('');
+  const [skillFilter, setSkillFilter] = useState('all');
+  const [statusFilter, setStatusFilter] = useState('all');
+
+  const filteredExams = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return exams.filter(e =>
+      (skillFilter === 'all' || e.skillType === skillFilter) &&
+      (statusFilter === 'all' || e.status === statusFilter) &&
+      (!q || `${e.examTitle} ${e.description || ''}`.toLowerCase().includes(q))
+    );
+  }, [exams, search, skillFilter, statusFilter]);
+
+  const hasFilter = search.trim() !== '' || skillFilter !== 'all' || statusFilter !== 'all';
+  const clearFilters = () => {
+    setSearch('');
+    setSkillFilter('all');
+    setStatusFilter('all');
+  };
+
   const formatDate = (dateStr: string) => {
     return new Date(dateStr).toLocaleDateString('en-US', {
       year: 'numeric',
@@ -29,7 +50,10 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
   return (
     <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 md:p-8">
       <div className="flex items-center justify-between mb-6 md:mb-8">
-        <h2 className="text-xl md:text-2xl font-bold text-indigo-900 dark:text-gray-100">Exam Sets</h2>
+        <h2 className="text-xl md:text-2xl font-bold text-indigo-900 dark:text-gray-100 flex items-center gap-2">
+          Exam Sets
+          <span className="text-sm font-semibold text-gray-400 dark:text-gray-500">({filteredExams.length})</span>
+        </h2>
         <button
           onClick={() => onEdit({
             id: '',
@@ -49,14 +73,55 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
         </button>
       </div>
 
+      {/* Bộ lọc */}
+      <div className="flex flex-col sm:flex-row gap-3 mb-6">
+        <div className="relative flex-1">
+          <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+          <input
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Tìm theo tên đề / mô tả..."
+            className="w-full pl-9 pr-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          />
+        </div>
+        <select
+          value={skillFilter}
+          onChange={(e) => setSkillFilter(e.target.value)}
+          className="w-full sm:w-44 px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="all">Tất cả kỹ năng</option>
+          <option value="reading">Reading</option>
+          <option value="listening">Listening</option>
+          <option value="speaking">Speaking</option>
+          <option value="writing">Writing</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+          className="w-full sm:w-40 px-3 py-2.5 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+        >
+          <option value="all">Tất cả trạng thái</option>
+          <option value="public">Public</option>
+          <option value="private">Private</option>
+        </select>
+        {hasFilter && (
+          <button
+            onClick={clearFilters}
+            className="flex items-center justify-center gap-1 px-3 py-2.5 rounded-lg text-sm font-semibold text-rose-600 dark:text-rose-400 border border-rose-200 dark:border-rose-900/40 hover:bg-rose-50 dark:hover:bg-rose-900/20 transition-all"
+          >
+            <X size={14} /> Xóa bộ lọc
+          </button>
+        )}
+      </div>
+
       {/* Mobile: Card View */}
       <div className="md:hidden space-y-3">
-        {exams.length === 0 ? (
+        {filteredExams.length === 0 ? (
           <div className="py-8 text-center text-gray-500 text-sm">
-            No exam sets found. Create one to get started!
+            {exams.length === 0 ? 'No exam sets found. Create one to get started!' : 'No exam matches the current filters.'}
           </div>
         ) : (
-          exams.map(exam => (
+          filteredExams.map(exam => (
             <div key={exam.id} className="bg-gray-50 dark:bg-gray-700 rounded-lg p-4 border border-gray-100 dark:border-gray-600">
               <div className="flex items-start justify-between mb-2">
                 <div className="flex-1 min-w-0 mr-2">
@@ -113,14 +178,14 @@ export const ExamList: React.FC<ExamListProps> = ({ exams, onEdit, onPreview, on
             </tr>
           </thead>
           <tbody>
-            {exams.length === 0 ? (
+            {filteredExams.length === 0 ? (
               <tr>
                 <td colSpan={8} className="py-8 text-center text-gray-500 dark:text-gray-400">
-                  No exam sets found. Create one to get started!
+                  {exams.length === 0 ? 'No exam sets found. Create one to get started!' : 'No exam matches the current filters.'}
                 </td>
               </tr>
             ) : (
-              exams.map(exam => (
+              filteredExams.map(exam => (
                 <tr key={exam.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700">
                   <td className="py-4 px-4">
                     <div className="font-semibold text-gray-900 dark:text-gray-100">{exam.examTitle}</div>
