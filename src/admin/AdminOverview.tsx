@@ -1,8 +1,8 @@
-import React, { useEffect, useState, useCallback } from 'react';
+import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Loader2, RefreshCw, BookOpen, Users, GraduationCap, School,
   PhoneCall, ClipboardList, CheckCircle2, AlertCircle, ArrowRight,
-  Phone, FileText, Clock,
+  Phone, FileText, Clock, Search, X, Filter,
 } from 'lucide-react';
 import { fetchAdminStats, fetchExamLeads } from '../lib/supabaseService';
 
@@ -12,7 +12,11 @@ interface AdminOverviewProps {
 
 export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
   const [stats, setStats] = useState<any>(null);
-  const [recentLeads, setRecentLeads] = useState<any[]>([]);
+  const [leads, setLeads] = useState<any[]>([]);
+  const [search, setSearch] = useState('');
+  const [statusFilter, setStatusFilter] = useState('all');
+  const [skillFilter, setSkillFilter] = useState('all');
+  const [timeFilter, setTimeFilter] = useState('all');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
@@ -20,9 +24,9 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
     setLoading(true);
     setError('');
     try {
-      const [s, leads] = await Promise.all([fetchAdminStats(), fetchExamLeads()]);
+      const [s, leadsData] = await Promise.all([fetchAdminStats(), fetchExamLeads()]);
       setStats(s);
-      setRecentLeads((leads || []).slice(0, 8));
+      setLeads(leadsData || []);
     } catch (err: any) {
       console.error('Failed to load admin stats:', err);
       setError('Không thể tải thống kê. Kiểm tra kết nối Supabase và đã chạy migration.');
@@ -34,6 +38,45 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
   useEffect(() => {
     load();
   }, [load]);
+
+  // ---- Bộ lọc ----
+  const matchTime = (createdAt: string) => {
+    if (timeFilter === 'all') return true;
+    const hours: Record<string, number> = { '24h': 24, '7d': 168, '30d': 720 };
+    return Date.now() - new Date(createdAt).getTime() <= hours[timeFilter] * 3600 * 1000;
+  };
+
+  const matchSearch = (l: any, q: string) =>
+    !q || `${l.full_name || ''} ${l.phone || ''}`.toLowerCase().includes(q);
+
+  const filteredLeads = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return leads.filter(l =>
+      (statusFilter === 'all' || l.grading_status === statusFilter) &&
+      (skillFilter === 'all' || l.skill_type === skillFilter) &&
+      matchTime(l.created_at) &&
+      matchSearch(l, q)
+    );
+  }, [leads, search, statusFilter, skillFilter, timeFilter]);
+
+  const pendingLeads = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    return leads.filter(l =>
+      l.grading_status !== 'graded' &&
+      (skillFilter === 'all' || l.skill_type === skillFilter) &&
+      matchTime(l.created_at) &&
+      matchSearch(l, q)
+    );
+  }, [leads, search, skillFilter, timeFilter]);
+
+  const hasFilter = search.trim() !== '' || statusFilter !== 'all' || skillFilter !== 'all' || timeFilter !== 'all';
+
+  const clearFilters = () => {
+    setSearch('');
+    setStatusFilter('all');
+    setSkillFilter('all');
+    setTimeFilter('all');
+  };
 
   const formatDate = (d: string) => new Date(d).toLocaleString('vi-VN', {
     day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit',
@@ -118,6 +161,66 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
         ))}
       </div>
 
+      {/* Bộ lọc */}
+      <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-4 mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h3 className="font-semibold text-sm text-gray-600 dark:text-gray-300 flex items-center gap-2">
+            <Filter size={16} className="text-indigo-500" />
+            Bộ lọc
+          </h3>
+          {hasFilter && (
+            <button
+              onClick={clearFilters}
+              className="flex items-center gap-1 text-xs font-semibold text-rose-600 dark:text-rose-400 hover:underline"
+            >
+              <X size={13} /> Xóa bộ lọc
+            </button>
+          )}
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          <div className="relative">
+            <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+            <input
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+              placeholder="Tìm tên / SĐT..."
+              className="w-full pl-9 pr-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 placeholder-gray-400 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            />
+          </div>
+          <select
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="all">Tất cả trạng thái</option>
+            <option value="unassigned">Chưa gán</option>
+            <option value="assigned">Đã gán</option>
+            <option value="graded">Đã chấm</option>
+          </select>
+          <select
+            value={skillFilter}
+            onChange={(e) => setSkillFilter(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="all">Tất cả kỹ năng</option>
+            <option value="listening">Nghe</option>
+            <option value="reading">Đọc</option>
+            <option value="writing">Viết</option>
+            <option value="speaking">Nói</option>
+          </select>
+          <select
+            value={timeFilter}
+            onChange={(e) => setTimeFilter(e.target.value)}
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-lg bg-white dark:bg-gray-900 text-sm text-gray-800 dark:text-gray-200 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          >
+            <option value="all">Mọi thời gian</option>
+            <option value="24h">24 giờ qua</option>
+            <option value="7d">7 ngày qua</option>
+            <option value="30d">30 ngày qua</option>
+          </select>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Recent leads */}
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 overflow-hidden">
@@ -125,6 +228,9 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
             <h3 className="font-bold text-indigo-900 dark:text-gray-100 flex items-center gap-2">
               <PhoneCall size={18} className="text-rose-500" />
               Leads mới nhất
+              {filteredLeads.length > 0 && (
+                <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">({filteredLeads.length})</span>
+              )}
             </h3>
             <button
               onClick={() => onNavigate('guest_grading')}
@@ -133,13 +239,13 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
               Xem tất cả →
             </button>
           </div>
-          {recentLeads.length === 0 ? (
+          {filteredLeads.length === 0 ? (
             <div className="p-8 text-center text-sm text-gray-400">
-              Chưa có lead nào.
+              {leads.length === 0 ? 'Chưa có lead nào.' : 'Không có lead phù hợp với bộ lọc.'}
             </div>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-gray-700">
-              {recentLeads.map(lead => (
+              {filteredLeads.slice(0, 8).map(lead => (
                 <div key={lead.id} className="px-5 py-3 flex items-center gap-3">
                   <div className="w-9 h-9 rounded-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 font-bold text-sm flex-shrink-0">
                     {(lead.full_name || '?').charAt(0).toUpperCase()}
@@ -178,14 +284,20 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
               Vào chấm bài →
             </button>
           </div>
-          {recentLeads.filter(l => l.grading_status !== 'graded').length === 0 ? (
+          {pendingLeads.length === 0 ? (
             <div className="p-8 text-center">
               <CheckCircle2 size={40} className="mx-auto text-emerald-400 mb-3" />
-              <p className="text-sm text-gray-500 dark:text-gray-400">Tất cả bài viết đã được chấm. Tuyệt vời!</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                {leads.length === 0
+                  ? 'Chưa có lead nào.'
+                  : hasFilter
+                    ? 'Không có bài phù hợp với bộ lọc.'
+                    : 'Tất cả bài viết đã được chấm. Tuyệt vời!'}
+              </p>
             </div>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-gray-700">
-              {recentLeads.filter(l => l.grading_status !== 'graded').slice(0, 6).map(lead => (
+              {pendingLeads.slice(0, 6).map(lead => (
                 <button
                   key={lead.id}
                   onClick={() => onNavigate('guest_grading')}
