@@ -60,6 +60,8 @@ function App() {
   const [adminTab, setAdminTab] = useState<'overview' | 'exams' | 'students' | 'classes' | 'grading' | 'speaking_grading' | 'teachers' | 'guest_grading' | 'bundles' | 'database'>('overview');
   const [isTeacherView, setIsTeacherView] = useState(false);
   const [guestLookupOpen, setGuestLookupOpen] = useState(false);
+  /** Bật khi vừa bấm Start làm bài → ListeningView tự phát chain ngay khi mount (tận dụng user gesture) */
+  const [examAutoPlay, setExamAutoPlay] = useState(false);
 
   // Bộ đề thi thử (guest) — 4 kỹ năng gom 1 session / 1 passcode
   const [bundles, setBundles] = useState<ExamBundle[]>([]);
@@ -216,6 +218,8 @@ function App() {
       setWritingAnswers({});
       setWritingSubmitted(false);
       setGuestSpeakingAudios([]);
+      // Cho ListeningView phát chain ngay khi vào bài (vẫn trong user gesture của nút Start)
+      setExamAutoPlay(true);
       setPage('exam');
     }
   };
@@ -729,9 +733,11 @@ function App() {
           <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
             <div className="w-full md:w-1/2 bg-white dark:bg-gray-800">
               <ListeningView
+                key={selectedExam.id}
                 passages={selectedExam.passages}
                 currentPassageIndex={examState.currentPassageIndex}
-                onSelectPassage={examState.selectPassage}
+                canPlayIndividual={isAdmin || isTeacherView || userRole === 'teacher'}
+                autoPlay={examAutoPlay}
               />
             </div>
             <div className="w-full md:w-1/2 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
