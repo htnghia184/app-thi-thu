@@ -2,11 +2,14 @@ import React, { useState } from 'react';
 import {
   ArrowLeft, Layers, BookOpen, Headphones, BookMarked, Mic,
   CheckCircle, Loader2, Send, User, Phone, Mail, Info, Clock, GraduationCap, KeyRound, ShieldCheck,
+  MessageSquare,
 } from 'lucide-react';
 import { VstepExamSet } from '../data/vstepReadingMock';
 import { ExamBundle } from '../lib/supabaseService';
 import { GuestResultLookup } from './GuestResultLookup';
 import zaloQr from '../../zalo-oa.jpg';
+// Link Zalo OA để mở chat trực tiếp trên mobile (thay cho quét QR)
+const ZALO_OA_URL = 'https://zalo.me/3195730418741016371';
 
 /** Kết quả 1 kỹ năng đã nộp trong bộ — được lưu để tạo session khi kết thúc */
 export interface BundleSkillResult {
@@ -141,6 +144,15 @@ export const GuestBundleView: React.FC<GuestBundleViewProps> = ({
                     alt="Zalo OA QR"
                     className="w-48 h-48 md:w-56 md:h-56 object-contain rounded-xl border border-gray-200 dark:border-gray-600 bg-white p-2"
                   />
+                  <a
+                    href={ZALO_OA_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#0068ff] text-white rounded-xl font-semibold hover:bg-[#0058e0] hover:scale-105 transition-all shadow-md"
+                  >
+                    <MessageSquare size={18} />
+                    Mở Zalo nhắn tin ngay
+                  </a>
                 </div>
 
                 <div className="flex flex-col sm:flex-row items-center justify-center gap-3">
@@ -282,6 +294,15 @@ export const GuestBundleView: React.FC<GuestBundleViewProps> = ({
                     alt="Zalo OA QR"
                     className="w-48 h-48 md:w-52 md:h-52 object-contain rounded-xl border border-gray-200 dark:border-gray-600 bg-white p-2"
                   />
+                  <a
+                    href={ZALO_OA_URL}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#0068ff] text-white rounded-xl font-semibold hover:bg-[#0058e0] hover:scale-105 transition-all shadow-md"
+                  >
+                    <MessageSquare size={18} />
+                    Mở Zalo nhắn tin ngay
+                  </a>
                   <p className="text-xs text-gray-400 dark:text-gray-500 text-center leading-relaxed">
                     Nhắn tin & subscribe Zalo OA để nhận kết quả
                     <br />và tư vấn lộ trình học miễn phí.

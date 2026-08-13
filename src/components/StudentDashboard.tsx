@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { VstepExamSet } from '../data/vstepReadingMock';
 import { fetchUserExamResults, fetchStudentAssignments, fetchStudentBundleAssignments, Assignment, ExamBundle, BundleAssignment } from '../lib/supabaseService';
-import { FileText, Clock, BarChart3, History, LogOut, User, Shield, Trophy, Loader2, Headphones, BookOpen, BookMarked, Calendar, Bell, BellRing, Moon, Sun, Mic, AlertTriangle, Layers } from 'lucide-react';
+import { FileText, Clock, BarChart3, History, LogOut, User, Shield, Trophy, Loader2, Headphones, BookOpen, BookMarked, Calendar, Bell, BellRing, Moon, Sun, Mic, AlertTriangle, Layers, Search } from 'lucide-react';
 interface StudentDashboardProps {
   user: any;
   userRole: string | null;
@@ -440,6 +440,29 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
       </header>
 
       <main className="max-w-7xl mx-auto px-4 md:px-8 py-4 md:py-8">
+        {/* Guest: tra cứu kết quả — chỉ hiện trên mobile, desktop giữ vị trí cũ ở sidebar */}
+        {isGuest && onLookupResult && (
+          <div className="mb-6 md:hidden">
+            <button
+              onClick={onLookupResult}
+              className="w-full flex items-center justify-between gap-3 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-xl shadow-lg px-5 py-4 hover:from-emerald-600 hover:to-emerald-700 hover:scale-[1.01] transition-all text-left"
+            >
+              <span className="flex items-center gap-3 min-w-0">
+                <span className="p-2 bg-white/20 rounded-lg flex-shrink-0">
+                  <Search size={20} />
+                </span>
+                <span className="min-w-0">
+                  <span className="block font-bold text-sm md:text-base">Tra cứu kết quả thi thử</span>
+                  <span className="block text-emerald-100 text-xs md:text-sm truncate">
+                    Nhập số điện thoại + passcode đã nhận qua Zalo để xem kết quả chấm điểm
+                  </span>
+                </span>
+              </span>
+              <span className="text-emerald-100 flex-shrink-0 text-lg">→</span>
+            </button>
+          </div>
+        )}
+
         {/* Welcome + Stats */}
         <div className="grid grid-cols-1 md:grid-cols-4 gap-4 md:gap-6 mb-8">
           <div className="md:col-span-2 bg-white dark:bg-gray-800 rounded-xl shadow-lg dark:shadow-gray-900/30 p-6 md:p-8">
@@ -704,7 +727,7 @@ export const StudentDashboard: React.FC<StudentDashboardProps> = ({
                 {onLookupResult && (
                   <button
                     onClick={onLookupResult}
-                    className="w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all text-sm"
+                    className="hidden md:block w-full py-2.5 bg-gradient-to-r from-emerald-500 to-emerald-600 text-white rounded-lg font-semibold hover:from-emerald-600 hover:to-emerald-700 transition-all text-sm"
                   >
                     Tra cứu kết quả thi thử
                   </button>

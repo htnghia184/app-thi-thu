@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { CheckCircle, Loader2, Send, ArrowLeft, Phone, User, Mail, Info } from 'lucide-react';
+import { CheckCircle, Loader2, Send, ArrowLeft, Phone, User, Mail, Info, MessageSquare } from 'lucide-react';
 import { VstepExamSet } from '../data/vstepReadingMock';
 import { submitGuestResult, generatePasscode } from '../lib/supabaseService';
 import { GuestResultLookup } from './GuestResultLookup';
 // Ảnh QR Zalo OA đặt ở thư mục gốc của project (zalo-oa.jpg)
 import zaloQr from '../../zalo-oa.jpg';
+// Link Zalo OA để mở chat trực tiếp trên mobile (thay cho quét QR)
+const ZALO_OA_URL = 'https://zalo.me/3195730418741016371';
 
 interface GuestResultViewProps {
   exam: VstepExamSet;
@@ -127,6 +129,15 @@ export const GuestResultView: React.FC<GuestResultViewProps> = ({
                 alt="Zalo OA QR"
                 className="w-48 h-48 md:w-56 md:h-56 object-contain rounded-xl border border-gray-200 dark:border-gray-600 bg-white p-2"
               />
+              <a
+                href={ZALO_OA_URL}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center justify-center gap-2 px-6 py-3 bg-[#0068ff] text-white rounded-xl font-semibold hover:bg-[#0058e0] hover:scale-105 transition-all shadow-md"
+              >
+                <MessageSquare size={18} />
+                Mở Zalo nhắn tin ngay
+              </a>
             </div>
 
             <div className="flex flex-col sm:flex-row items-center justify-center gap-3">

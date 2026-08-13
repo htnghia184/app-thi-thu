@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ArrowLeft, KeyRound, Phone, Search, Loader2, CheckCircle2, MessageSquare, Layers, BookOpen, Headphones, BookMarked, Mic } from 'lucide-react';
+import { ArrowLeft, KeyRound, Phone, Search, Loader2, CheckCircle2, MessageSquare, Layers, BookOpen, Headphones, BookMarked, Mic, ChevronRight } from 'lucide-react';
 import { fetchGuestResult, fetchExamById, fetchGuestSessionResult } from '../lib/supabaseService';
 import { ResultView } from './ResultView';
 import { VstepExamSet } from '../data/vstepReadingMock';
@@ -26,6 +26,10 @@ export const GuestResultLookup: React.FC<GuestResultLookupProps> = ({
   const [examLoading, setExamLoading] = useState(false);
   /** Tra cứu theo session (thi thử theo bộ — 1 passcode gom nhiều kỹ năng) */
   const [sessionResult, setSessionResult] = useState<{ session: any; leads: any[] } | null>(null);
+  /** Chi tiết 1 kỹ năng reading/listening trong bộ (mở như student review) */
+  const [detailLead, setDetailLead] = useState<any | null>(null);
+  const [detailExam, setDetailExam] = useState<VstepExamSet | null>(null);
+  const [detailLoading, setDetailLoading] = useState(false);
 
   const handleVerify = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -104,6 +108,119 @@ export const GuestResultLookup: React.FC<GuestResultLookupProps> = ({
     speaking: { icon: Mic, label: 'Speaking', bg: 'bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400' },
   };
 
+  /** Mở chi tiết kết quả 1 kỹ năng reading/listening trong bộ — hiện chi tiết từng câu như student */
+  const handleViewSkillDetail = async (lead: any) => {
+    if (lead.skill_type !== 'reading' && lead.skill_type !== 'listening') return;
+    if (!lead.exam_id) return;
+    setDetailLead(lead);
+    setDetailExam(null);
+    setDetailLoading(true);
+    try {
+      const examData = await fetchExamById(lead.exam_id);
+      setDetailExam(examData);
+    } catch (err) {
+      console.error('Failed to fetch exam for session skill detail:', err);
+      setDetailExam(null);
+    } finally {
+      setDetailLoading(false);
+    }
+  };
+
+  // ---- Chi tiết 1 kỹ năng reading/listening trong bộ (như student review) ----
+  if (detailLead) {
+    const detailQuestions = detailExam?.passages?.flatMap((p: any) => p.questions) ?? [];
+    const backToList = (
+      <button
+        onClick={() => setDetailLead(null)}
+        className="mb-4 text-indigo-700 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 underline text-sm flex items-center gap-1"
+      >
+        <ArrowLeft size={16} /> Quay lại danh sách kỹ năng
+      </button>
+    );
+
+    if (detailLoading) {
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 flex items-center justify-center">
+          <Loader2 size={28} className="animate-spin text-indigo-600" />
+        </div>
+      );
+    }
+
+    if (detailExam && detailQuestions.length > 0) {
+      const results = detailQuestions.map((q: any) => {
+        const userAnswer = detailLead.user_answers?.[q.id] ?? null;
+        const isCorrect = userAnswer === q.correctAnswer;
+        return { question: q, userAnswer, isCorrect };
+      });
+      const correctCount = results.filter((r: any) => r.isCorrect).length;
+      const totalCount = detailQuestions.length;
+      const percentage = totalCount ? correctCount / totalCount : 0;
+      const vstepScore = Math.round(percentage * 10 * 10) / 10;
+      const timeTaken = detailLead.time_spent_seconds ?? 0;
+
+      return (
+        <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
+          <div className="flex justify-end p-4">
+            <button onClick={onHome} className="text-indigo-700 dark:text-indigo-400 hover:text-indigo-900 dark:hover:text-indigo-300 underline text-sm">
+              Back to Dashboard
+            </button>
+          </div>
+          <div className="max-w-4xl mx-auto px-4 md:px-8">{backToList}</div>
+          <ResultView
+            correctCount={correctCount}
+            totalCount={totalCount}
+            percentage={percentage}
+            vstepScore={vstepScore}
+            timeTaken={timeTaken}
+            results={results}
+            passages={detailExam.passages}
+            onReset={() => setDetailLead(null)}
+            resetLabel="Quay lại danh sách kỹ năng"
+          />
+        </div>
+      );
+    }
+
+    // Đề bị xóa / không tải được → hiện tóm tắt thay vì chi tiết
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800 py-10 px-4 md:px-8">
+        <div className="max-w-xl mx-auto">
+          {backToList}
+          <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-xl p-8 md:p-10 text-center">
+            <div className="w-16 h-16 bg-indigo-100 dark:bg-indigo-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+              <BookOpen size={28} className="text-indigo-600" />
+            </div>
+            <h2 className="text-xl font-bold text-indigo-900 dark:text-gray-100 mb-3">
+              {detailLead.exam_title || 'Bài thi'}
+            </h2>
+            <p className="text-gray-600 dark:text-gray-400 mb-6 leading-relaxed">
+              Không thể tải chi tiết bài thi (có thể đề đã bị xóa).
+            </p>
+            <div className="mb-8 p-4 rounded-xl bg-gray-50 dark:bg-gray-700 text-left space-y-2 text-sm">
+              <div className="flex justify-between text-gray-700 dark:text-gray-300">
+                <span>Điểm</span>
+                <span className="font-semibold">{detailLead.score_vstep ?? '-'} (0-10)</span>
+              </div>
+              <div className="flex justify-between text-gray-700 dark:text-gray-300">
+                <span>Số câu đúng</span>
+                <span className="font-semibold">{detailLead.score_raw ?? '-'}/{detailLead.total_questions ?? '-'}</span>
+              </div>
+              <div className="flex justify-between text-gray-700 dark:text-gray-300">
+                <span>Ngày thi</span><span>{formatDate(detailLead.created_at)}</span>
+              </div>
+            </div>
+            <button
+              onClick={() => setDetailLead(null)}
+              className="px-8 py-3 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-xl font-semibold hover:shadow-lg transition-all"
+            >
+              Quay lại danh sách kỹ năng
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   // ---- Đã xác minh theo session (bộ đề — nhiều kỹ năng) ----
   if (sessionResult) {
     const { session, leads } = sessionResult;
@@ -129,6 +246,9 @@ export const GuestResultLookup: React.FC<GuestResultLookupProps> = ({
               <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                 Bạn đã hoàn thành <span className="font-semibold">{leads.length}</span> kỹ năng trong bộ.
                 Chi tiết từng kỹ năng:
+                <span className="block mt-1 text-xs text-indigo-500 dark:text-indigo-400">
+                  Bấm vào Reading/Listening để xem chi tiết từng câu (giống xem lại bài làm).
+                </span>
               </p>
 
               {leads.length === 0 ? (
@@ -141,8 +261,9 @@ export const GuestResultLookup: React.FC<GuestResultLookupProps> = ({
                     const skill = skillBadge[l.skill_type] || skillBadge.reading;
                     const Icon = skill.icon;
                     const hasScore = l.score_vstep != null;
-                    return (
-                      <div key={l.id} className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                    const canViewDetail = (l.skill_type === 'reading' || l.skill_type === 'listening') && !!l.exam_id;
+                    const rowContent = (
+                      <>
                         <div className={`p-2 rounded-lg ${skill.bg} flex-shrink-0`}>
                           <Icon size={18} />
                         </div>
@@ -176,6 +297,24 @@ export const GuestResultLookup: React.FC<GuestResultLookupProps> = ({
                             </div>
                           )}
                         </div>
+                      </>
+                    );
+
+                    if (canViewDetail) {
+                      return (
+                        <button
+                          key={l.id}
+                          onClick={() => handleViewSkillDetail(l)}
+                          className="w-full flex items-center gap-3 p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30 hover:border-indigo-300 dark:hover:border-indigo-500 hover:bg-indigo-50 dark:hover:bg-gray-700 transition-all text-left group"
+                        >
+                          {rowContent}
+                          <ChevronRight size={18} className="text-indigo-400 flex-shrink-0 group-hover:translate-x-0.5 transition-transform" />
+                        </button>
+                      );
+                    }
+                    return (
+                      <div key={l.id} className="flex items-center gap-3 p-4 rounded-xl border border-gray-100 dark:border-gray-700 bg-gray-50 dark:bg-gray-700/30">
+                        {rowContent}
                       </div>
                     );
                   })}

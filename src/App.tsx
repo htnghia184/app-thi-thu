@@ -347,6 +347,7 @@ function App() {
 
   const skillType = selectedExam?.skillType || 'reading';
   const [mobileReadingTab, setMobileReadingTab] = useState<'passage' | 'questions'>('passage');
+  const [mobileListeningTab, setMobileListeningTab] = useState<'audio' | 'questions'>('audio');
   const answeredCount = Object.values(examState.userAnswers).filter(a => a !== null && a !== undefined).length;
   // Đã nộp xong kỹ năng đang thi (bundle) — dùng để chặn Back khi chưa nộp ở chế độ nghiêm ngặt
   const bundleDone = skillType === 'writing' ? writingSubmitted : examState.isCompleted;
@@ -781,10 +782,34 @@ function App() {
           </div>
         )}
 
-        {/* LISTENING: single scrollable column */}
+        {/* LISTENING: split screen với 2 tab trên mobile */}
         {skillType === 'listening' && (
-          <div className="flex-1 flex flex-col md:flex-row overflow-hidden">
-            <div className="w-full md:w-1/2 bg-white dark:bg-gray-800">
+          <div className="flex-1 flex overflow-hidden">
+            {/* Mobile tab bar for listening */}
+            <div className="fixed bottom-0 left-0 right-0 z-40 md:hidden flex bg-white dark:bg-gray-800 border-t border-gray-200 dark:border-gray-700 shadow-2xl">
+              <button
+                onClick={() => setMobileListeningTab('audio')}
+                className={`flex-1 py-3 text-sm font-semibold text-center transition-colors ${
+                  mobileListeningTab === 'audio'
+                    ? 'text-purple-700 bg-purple-50 border-t-2 border-purple-600'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-purple-600'
+                }`}
+              >
+                Audio
+              </button>
+              <button
+                onClick={() => setMobileListeningTab('questions')}
+                className={`flex-1 py-3 text-sm font-semibold text-center transition-colors ${
+                  mobileListeningTab === 'questions'
+                    ? 'text-purple-700 bg-purple-50 border-t-2 border-purple-600'
+                    : 'text-gray-500 dark:text-gray-400 hover:text-purple-600'
+                }`}
+              >
+                Questions {answeredCount > 0 && `(${answeredCount})`}
+              </button>
+            </div>
+            {/* Audio panel */}
+            <div className={`w-full md:w-1/2 ${mobileListeningTab === 'questions' ? 'hidden md:block' : ''}`}>
               <ListeningView
                 key={selectedExam.id}
                 passages={selectedExam.passages}
@@ -793,8 +818,9 @@ function App() {
                 autoPlay={examAutoPlay}
               />
             </div>
-            <div className="w-full md:w-1/2 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900">
-              <div className="flex-1 overflow-y-auto p-4 md:p-8">
+            {/* Questions panel */}
+            <div className={`w-full md:w-1/2 flex flex-col overflow-hidden bg-gray-50 dark:bg-gray-900 ${mobileListeningTab === 'audio' ? 'hidden md:flex' : ''}`}>
+              <div className="flex-1 overflow-y-auto p-4 md:p-8 pb-20 md:pb-8">
                 <div className="max-w-2xl mx-auto">
                   <div className="bg-gradient-to-r from-purple-500 to-purple-700 rounded-2xl shadow-xl p-4 md:p-6 mb-6 text-white">
                     <Headphones size={24} className="mb-2 hidden md:block" />
