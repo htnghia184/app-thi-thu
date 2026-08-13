@@ -3,6 +3,7 @@ import { VstepExamSet } from './data/vstepReadingMock';
 import { useVstepExamState } from './hooks/useVstepExam';
 import { useTimer } from './hooks/useTimer';
 import { useHighlighter } from './hooks/useHighlighter';
+import { useStrictMode } from './hooks/useStrictMode';
 import { PassageView } from './components/PassageView';
 import { PassageTimer } from './components/PassageTimer';
 import { QuestionList } from './components/QuestionList';
@@ -174,6 +175,17 @@ function App() {
     },
   );
 
+  // Strict mode (anti-cheat) theo bộ đề — chạy xuyên suốt bundle, tự nộp sau 3 lần vi phạm
+  const handleStrictLimit = useCallback(() => {
+    if (!selectedExam) return;
+    if (selectedExam.skillType === 'writing') {
+      setWritingSubmitted(true);
+    } else {
+      examState.submitExam();
+    }
+  }, [selectedExam, examState]);
+  const strictMode = useStrictMode(handleStrictLimit);
+
   const handleAuthSuccess = () => {
     getCurrentUser().then(async (u) => {
       if (u) {
@@ -218,6 +230,10 @@ function App() {
       setWritingAnswers({});
       setWritingSubmitted(false);
       setGuestSpeakingAudios([]);
+      // Bộ đề bật anti-cheat → vào strict mode (fullscreen, chặn tab mới...) ngay khi bắt đầu làm bài
+      if (selectedBundle?.strict_mode) {
+        strictMode.start();
+      }
       // Cho ListeningView phát chain ngay khi vào bài (vẫn trong user gesture của nút Start)
       setExamAutoPlay(true);
       setPage('exam');
@@ -276,14 +292,18 @@ function App() {
         speaking_audio: r.speakingAudios,
       });
     }
+    // Kết thúc bộ → thoát strict mode (nếu có)
+    strictMode.stop();
   };
 
   const handleBackToDashboard = () => {
+    strictMode.stop();
     setSelectedExam(null);
     setPage('dashboard');
   };
 
   const handleReset = () => {
+    strictMode.stop();
     examState.resetExam();
     resetTimer();
     setSelectedExam(null);
@@ -328,13 +348,14 @@ function App() {
   const skillType = selectedExam?.skillType || 'reading';
   const [mobileReadingTab, setMobileReadingTab] = useState<'passage' | 'questions'>('passage');
   const answeredCount = Object.values(examState.userAnswers).filter(a => a !== null && a !== undefined).length;
+  // Đã nộp xong kỹ năng đang thi (bundle) — dùng để chặn Back khi chưa nộp ở chế độ nghiêm ngặt
+  const bundleDone = skillType === 'writing' ? writingSubmitted : examState.isCompleted;
 
   // Bundle (guest/student): khi nộp xong 1 kỹ năng → ghi nhận kết quả & quay về màn bộ
   useEffect(() => {
     if (!(selectedBundle && selectedExam)) return;
     const guestDone = skillType === 'writing' ? writingSubmitted : examState.isCompleted;
     if (!guestDone) return;
-    if (bundleResults.some(r => r.examId === selectedExam.id)) return;
 
     const hasAutoScore = skillType !== 'writing' && skillType !== 'speaking';
     const results = hasAutoScore ? examState.calculateResults() : null;
@@ -351,7 +372,14 @@ function App() {
       speakingAudios: guestSpeakingAudios.length > 0 ? [...guestSpeakingAudios] : null,
       submittedAt: Date.now(),
     };
-    setBundleResults(prev => [...prev, skillResult]);
+    // Nếu skill này đã nộp trước đó (làm lại) → thay kết quả mới, không thêm trùng
+    setBundleResults(prev => {
+      const idx = prev.findIndex(r => r.examId === selectedExam.id);
+      if (idx === -1) return [...prev, skillResult];
+      const next = [...prev];
+      next[idx] = skillResult;
+      return next;
+    });
     // Reset trạng thái đề để quay về màn chọn kỹ năng của bộ
     examState.resetExam();
     resetTimer();
@@ -366,6 +394,28 @@ function App() {
   // Số thứ tự câu hỏi bắt đầu của passage tại index — để QuestionList đánh số liên tục khớp QuestionMap
   const passageStartNumber = (index: number) =>
     (selectedExam?.passages.slice(0, index).reduce((sum, p) => sum + p.questions.length, 0)) || 0;
+
+  // Overlay cảnh báo vi phạm strict mode (anti-cheat)
+  const strictWarningOverlay = strictMode.warning ? (
+    <div className="fixed inset-0 z-[100] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-gray-800 rounded-2xl shadow-2xl max-w-md w-full p-6 text-center border-2 border-rose-300 dark:border-rose-800">
+        <div className="w-14 h-14 bg-rose-100 dark:bg-rose-900/30 rounded-full flex items-center justify-center mx-auto mb-4">
+          <Shield size={24} className="text-rose-600 dark:text-rose-400" />
+        </div>
+        <h3 className="text-lg font-bold text-gray-900 dark:text-gray-100 mb-2">Cảnh báo vi phạm chế độ thi</h3>
+        <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">{strictMode.warning}</p>
+        <p className="text-sm font-semibold text-rose-600 dark:text-rose-400 mb-4">
+          Lần vi phạm {Math.min(strictMode.violations, strictMode.maxViolations)}/{strictMode.maxViolations} — đủ {strictMode.maxViolations} lần sẽ tự động nộp bài.
+        </p>
+        <button
+          onClick={() => strictMode.setWarning(null)}
+          className="w-full py-2.5 bg-gradient-to-r from-indigo-600 to-indigo-700 text-white rounded-lg font-semibold hover:shadow-lg transition-all"
+        >
+          Tôi đã hiểu, tiếp tục
+        </button>
+      </div>
+    </div>
+  ) : null;
 
   // Loading auth
   if (loading) {
@@ -508,22 +558,24 @@ function App() {
   // Màn hình thi thử theo bộ (guest/student: chọn kỹ năng → thi → kết thúc)
   if (page === 'bundle' && selectedBundle) {
     return (
-      <GuestBundleView
-        bundle={selectedBundle}
-        exams={exams}
-        results={bundleResults}
-        isGuest={userRole === 'guest'}
-        onStartSkill={handleStartExam}
-        onFinish={handleBundleFinish}
-        onBack={() => { setSelectedBundle(null); setBundleResults([]); setPage('dashboard'); }}
-        onHome={() => { setSelectedBundle(null); setBundleResults([]); setPage('dashboard'); }}
-      />
+      <>
+        <GuestBundleView
+          bundle={selectedBundle}
+          exams={exams}
+          results={bundleResults}
+          isGuest={userRole === 'guest'}
+          onStartSkill={handleStartExam}
+          onFinish={handleBundleFinish}
+          onBack={() => { strictMode.stop(); setSelectedBundle(null); setBundleResults([]); setPage('dashboard'); }}
+          onHome={() => { strictMode.stop(); setSelectedBundle(null); setBundleResults([]); setPage('dashboard'); }}
+        />
+        {strictWarningOverlay}
+      </>
     );
   }
 
   // Đang thi theo bộ (guest/student): vừa nộp xong 1 kỹ năng → effect ghi nhận & quay về màn bộ
   if (page === 'exam' && selectedExam && selectedBundle) {
-    const bundleDone = skillType === 'writing' ? writingSubmitted : examState.isCompleted;
     if (bundleDone) {
       return (
         <div className="h-screen flex items-center justify-center bg-gradient-to-br from-indigo-50 via-purple-50 to-blue-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-800">
@@ -629,6 +681,7 @@ function App() {
           onSelectPassage={examState.selectPassage}
           onSubmitClick={() => setConfirmModalOpen(true)}
           onBackToDashboard={handleBackToDashboard}
+          disableBack={!!(selectedBundle?.strict_mode && !bundleDone)}
           bookmarkedCount={examState.getBookmarkedCount()}
         />
 
@@ -823,6 +876,8 @@ function App() {
           }}
           submitting={examState.submitting}
         />
+
+        {strictWarningOverlay}
       </div>
     );
   }

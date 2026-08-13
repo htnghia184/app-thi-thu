@@ -1819,6 +1819,8 @@ export interface ExamBundle {
   exam_ids: string[];
   /** 'public' = mọi người | 'private' = chỉ student | 'hidden' = ẩn hoàn toàn (chỉ admin) */
   visibility: 'public' | 'private' | 'hidden';
+  /** Chế độ thi nghiêm ngặt (anti-cheat): bắt buộc fullscreen, chặn tab mới / đổi tab; sau 3 vi phạm tự nộp */
+  strict_mode?: boolean;
   created_by?: string | null;
   created_at: string;
 }
@@ -1859,6 +1861,7 @@ export async function createExamBundle(payload: {
   description: string;
   exam_ids: string[];
   visibility: 'public' | 'private' | 'hidden';
+  strict_mode?: boolean;
   created_by?: string;
 }): Promise<void> {
   const { error } = await supabase.from('exam_bundles').insert(payload);
@@ -1870,6 +1873,7 @@ export async function updateExamBundle(id: string, payload: {
   description?: string;
   exam_ids?: string[];
   visibility?: 'public' | 'private' | 'hidden';
+  strict_mode?: boolean;
 }): Promise<void> {
   const { error } = await supabase.from('exam_bundles').update(payload).eq('id', id);
   if (error) throw error;

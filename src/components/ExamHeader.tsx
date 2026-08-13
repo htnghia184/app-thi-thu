@@ -11,6 +11,8 @@ interface ExamHeaderProps {
   onSelectPassage: (index: number) => void;
   onSubmitClick: () => void;
   onBackToDashboard: () => void;
+  /** Chặn nút Back khi đang thi nghiêm ngặt (chỉ back được sau khi nộp bài) */
+  disableBack?: boolean;
   bookmarkedCount?: number;
 }
 
@@ -24,6 +26,7 @@ export const ExamHeader: React.FC<ExamHeaderProps> = ({
   onSelectPassage,
   onSubmitClick,
   onBackToDashboard,
+  disableBack,
   bookmarkedCount,
 }) => {
   const isUrgent = minutes === 0 && seconds <= 60;
@@ -35,7 +38,14 @@ export const ExamHeader: React.FC<ExamHeaderProps> = ({
     <header className={`bg-gradient-to-r ${config.color} text-white shadow-lg z-50 sticky top-0`}>
       <div className="flex items-center justify-between px-4 py-3 md:px-8 md:py-4 border-b border-white/20">
         <div className="flex items-center gap-2 md:gap-4 min-w-0">
-          <button onClick={onBackToDashboard} className="text-white/70 hover:text-white text-sm transition-colors mr-1 md:mr-2 flex-shrink-0">
+          <button
+            onClick={onBackToDashboard}
+            disabled={disableBack}
+            title={disableBack ? 'Nộp bài xong mới được quay lại' : 'Back'}
+            className={`text-sm transition-colors mr-1 md:mr-2 flex-shrink-0 ${
+              disableBack ? 'text-white/25 cursor-not-allowed' : 'text-white/70 hover:text-white'
+            }`}
+          >
             ← <span className="hidden md:inline">Back</span>
           </button>
           {SkillIcon && <SkillIcon size={20} className="flex-shrink-0" />}

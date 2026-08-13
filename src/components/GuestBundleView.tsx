@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import {
   ArrowLeft, Layers, BookOpen, Headphones, BookMarked, Mic,
-  CheckCircle, Loader2, Send, User, Phone, Mail, Info, Clock, GraduationCap, KeyRound,
+  CheckCircle, Loader2, Send, User, Phone, Mail, Info, Clock, GraduationCap, KeyRound, ShieldCheck,
 } from 'lucide-react';
 import { VstepExamSet } from '../data/vstepReadingMock';
 import { ExamBundle } from '../lib/supabaseService';
@@ -331,6 +331,11 @@ export const GuestBundleView: React.FC<GuestBundleViewProps> = ({
                 <CheckCircle size={16} /> Kết quả tự lưu vào tài khoản
               </span>
             )}
+            {bundle.strict_mode && (
+              <span className="flex items-center gap-1.5">
+                <ShieldCheck size={16} /> Thi nghiêm ngặt — mỗi kỹ năng chỉ nộp 1 lần
+              </span>
+            )}
           </div>
         </div>
 
@@ -379,12 +384,23 @@ export const GuestBundleView: React.FC<GuestBundleViewProps> = ({
                         <div className="text-[10px] text-gray-400 dark:text-gray-500">Kết quả gửi qua Zalo</div>
                       </div>
                     )}
-                    <button
-                      onClick={() => onStartSkill(exam.id)}
-                      className={`px-4 md:px-5 py-2.5 bg-gradient-to-r ${meta.color} text-white rounded-lg font-semibold hover:shadow-lg transition-all shadow-md hover:scale-105 text-sm`}
-                    >
-                      {result ? 'Làm lại' : 'Làm bài'}
-                    </button>
+                    {(() => {
+                      // Chế độ nghiêm ngặt: mỗi kỹ năng chỉ nộp 1 lần, không làm lại
+                      const locked = !!bundle.strict_mode && !!result;
+                      return (
+                        <button
+                          onClick={() => onStartSkill(exam.id)}
+                          disabled={locked}
+                          className={`px-4 md:px-5 py-2.5 rounded-lg font-semibold transition-all text-sm ${
+                            locked
+                              ? 'bg-gray-200 dark:bg-gray-700 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                              : `bg-gradient-to-r ${meta.color} text-white hover:shadow-lg shadow-md hover:scale-105`
+                          }`}
+                        >
+                          {locked ? 'Đã nộp' : result ? 'Làm lại' : 'Làm bài'}
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               </div>

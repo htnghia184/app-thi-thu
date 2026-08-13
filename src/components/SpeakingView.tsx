@@ -66,8 +66,8 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
   // Beep + banner "Bắt đầu nói!" khi chuyển sang recording
   const [showSpeakBanner, setShowSpeakBanner] = useState(false);
   const bannerTimeoutRef = useRef<number | null>(null);
-  // Audio level meter (waveform theo tiếng nói)
-  const [audioLevel, setAudioLevel] = useState(0);
+  // Audio level meter (waveform theo tiếng nói) — vẽ trực tiếp lên canvas, không đè React re-render
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const audioContextRef = useRef<AudioContext | null>(null);
   const analyserRef = useRef<AnalyserNode | null>(null);
   const rafRef = useRef<number | null>(null);
@@ -129,6 +129,70 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
     }
   };
 
+  // Vẽ equalizer lên canvas theo dữ liệu tần số thực từ micro (mỗi frame, không qua React state)
+  const drawWaveform = (time: number) => {
+    const canvas = canvasRef.current;
+    const analyser = analyserRef.current;
+    if (!canvas || !analyser) return;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    const dpr = window.devicePixelRatio || 1;
+    const W = canvas.clientWidth;
+    const H = canvas.clientHeight;
+    if (!W || !H) return;
+    if (canvas.width !== W * dpr || canvas.height !== H * dpr) {
+      canvas.width = W * dpr;
+      canvas.height = H * dpr;
+    }
+    ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    ctx.clearRect(0, 0, W, H);
+
+    const data = new Uint8Array(analyser.frequencyBinCount);
+    analyser.getByteFrequencyData(data);
+    let peak = 0;
+    for (let i = 0; i < data.length; i++) peak = Math.max(peak, data[i] / 255);
+    const active = peak > 0.06;
+
+    const barW = 4;
+    const gap = 2;
+    const total = barW + gap;
+    const n = Math.floor(W / total);
+
+    const gradient = ctx.createLinearGradient(0, 0, 0, H);
+    if (active) {
+      gradient.addColorStop(0, '#f43f5e');
+      gradient.addColorStop(0.6, '#ec4899');
+      gradient.addColorStop(1, '#fb7185');
+    } else {
+      gradient.addColorStop(0, 'rgba(244,63,94,0.4)');
+      gradient.addColorStop(1, 'rgba(251,113,133,0.4)');
+    }
+    ctx.fillStyle = gradient;
+
+    for (let i = 0; i < n; i++) {
+      // Quét dải tần, bỏ vài bin thấp nhất để tránh nhiễu nền
+      const idx = Math.min(data.length - 1, Math.floor((i / n) * data.length * 0.9) + 2);
+      const level = data[idx] / 255;
+      // Seed ổn định theo cột → mỗi cột có dáng riêng, không thành hình tam giác
+      const seed = ((i * 73) % 17) / 17;
+      let h: number;
+      if (active) {
+        h = Math.max(0.08, level * (0.5 + seed * 0.7));
+      } else {
+        // Idle: từng cột nhún nhẹ theo sóng sin như equalizer trang nhạc
+        h = 0.13 + seed * 0.2 + Math.sin(time / 320 + i * 0.35) * 0.07;
+      }
+      const bh = Math.max(3, Math.min(H, h * H));
+      const x = i * total + 2;
+      const y = (H - bh) / 2;
+      ctx.beginPath();
+      const r = barW / 2;
+      if (typeof (ctx as any).roundRect === 'function') (ctx as any).roundRect(x, y, barW, bh, r);
+      else ctx.rect(x, y, barW, bh);
+      ctx.fill();
+    }
+  };
+
   // Waveform theo âm lượng thực tế từ stream micro
   const startLevelMeter = (stream: MediaStream) => {
     try {
@@ -140,15 +204,11 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
       analyser.fftSize = 256;
       source.connect(analyser);
       analyserRef.current = analyser;
-      const data = new Uint8Array(analyser.frequencyBinCount);
-      const tick = () => {
-        analyser.getByteFrequencyData(data);
-        let sum = 0;
-        for (let i = 0; i < data.length; i++) sum += data[i];
-        setAudioLevel(sum / data.length / 255);
+      const tick = (time: number) => {
+        drawWaveform(time);
         rafRef.current = requestAnimationFrame(tick);
       };
-      tick();
+      rafRef.current = requestAnimationFrame(tick);
     } catch {
       // ignore — không có waveform thì thôi
     }
@@ -162,7 +222,11 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
       audioContextRef.current = null;
     }
     analyserRef.current = null;
-    setAudioLevel(0);
+    const canvas = canvasRef.current;
+    if (canvas) {
+      const cctx = canvas.getContext('2d');
+      if (cctx) cctx.clearRect(0, 0, canvas.width, canvas.height);
+    }
   };
 
   const advanceAfterRecording = (passageId: number) => {
@@ -530,28 +594,12 @@ export const SpeakingView: React.FC<SpeakingViewProps> = ({
     return `${m.toString().padStart(2, '0')}:${s.toString().padStart(2, '0')}`;
   };
 
-  const renderWaveform = () => {
-    const BARS = 16;
-    const active = audioLevel > 0.03;
-    return (
-      <div className="flex items-end gap-1 h-12 justify-center">
-        {Array.from({ length: BARS }, (_, i) => {
-          const center = BARS / 2;
-          const distance = Math.abs(i - center) / center;
-          const base = active
-            ? Math.max(0.25, audioLevel * (1 - distance * 0.8) + 0.1)
-            : 0.12;
-          return (
-            <div
-              key={i}
-              className="w-2 rounded-full bg-gradient-to-t from-red-500 to-pink-400 transition-all duration-150"
-              style={{ height: `${Math.min(1, base) * 100}%`, opacity: active ? 0.95 : 0.35 }}
-            />
-          );
-        })}
-      </div>
-    );
-  };
+  const renderWaveform = () => (
+    <canvas
+      ref={canvasRef}
+      className="block w-full max-w-2xl h-20 md:h-24 mx-auto"
+    />
+  );
 
   const renderRecordingButton = () => {
     switch (recState) {

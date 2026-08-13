@@ -2,7 +2,7 @@ import React, { useEffect, useState, useCallback } from 'react';
 import {
   Loader2, Plus, Pencil, Trash2, Layers, BookOpen, Headphones, BookMarked, Mic,
   X, Save, RefreshCw, CheckCircle2, Globe, Lock, EyeOff as EyeHidden,
-  School, Calendar,
+  School, Calendar, ShieldCheck,
 } from 'lucide-react';
 import {
   fetchAllExamBundles, fetchExams, createExamBundle, updateExamBundle, deleteExamBundle,
@@ -48,6 +48,7 @@ export const AdminBundles: React.FC<AdminBundlesProps> = ({ viewMode = 'admin' }
   const [description, setDescription] = useState('');
   const [selectedIds, setSelectedIds] = useState<string[]>([]);
   const [visibility, setVisibility] = useState<Visibility>('public');
+  const [strictMode, setStrictMode] = useState(false);
 
   // Assign class state
   const [classes, setClasses] = useState<ClassData[]>([]);
@@ -89,6 +90,7 @@ export const AdminBundles: React.FC<AdminBundlesProps> = ({ viewMode = 'admin' }
     setDescription('');
     setSelectedIds([]);
     setVisibility(isTeacher ? 'private' : 'public');
+    setStrictMode(false);
     setError('');
     setModalOpen(true);
   };
@@ -99,6 +101,7 @@ export const AdminBundles: React.FC<AdminBundlesProps> = ({ viewMode = 'admin' }
     setDescription(b.description || '');
     setSelectedIds([...(b.exam_ids || [])]);
     setVisibility(isTeacher ? 'private' : (b.visibility || 'public'));
+    setStrictMode(!!b.strict_mode);
     setError('');
     setModalOpen(true);
   };
@@ -123,6 +126,7 @@ export const AdminBundles: React.FC<AdminBundlesProps> = ({ viewMode = 'admin' }
           description: description.trim(),
           exam_ids: selectedIds,
           visibility: isTeacher ? 'private' : visibility,
+          strict_mode: strictMode,
         });
       } else {
         await createExamBundle({
@@ -130,6 +134,7 @@ export const AdminBundles: React.FC<AdminBundlesProps> = ({ viewMode = 'admin' }
           description: description.trim(),
           exam_ids: selectedIds,
           visibility: isTeacher ? 'private' : visibility,
+          strict_mode: strictMode,
           // Bắt buộc gửi created_by để RLS "teacher chỉ quản lý bộ của mình" khớp
           created_by: currentUserId || undefined,
         });
@@ -274,6 +279,11 @@ export const AdminBundles: React.FC<AdminBundlesProps> = ({ viewMode = 'admin' }
                   <span className={`flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full flex-shrink-0 ${vMeta.badge}`}>
                     <VIcon size={12} /> {vMeta.label}
                   </span>
+                  {b.strict_mode && (
+                    <span className="flex items-center gap-1 px-2 py-0.5 text-xs font-semibold rounded-full flex-shrink-0 bg-rose-100 text-rose-700 dark:bg-rose-900/30 dark:text-rose-400">
+                      <ShieldCheck size={12} /> Strict
+                    </span>
+                  )}
                 </div>
                 {b.description && (
                   <p className="text-sm text-gray-600 dark:text-gray-400 mb-3 line-clamp-2">{b.description}</p>
@@ -465,6 +475,34 @@ export const AdminBundles: React.FC<AdminBundlesProps> = ({ viewMode = 'admin' }
                     })}
                   </div>
                 )}
+              </div>
+
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 dark:text-gray-300 mb-2">
+                  Chế độ thi nghiêm ngặt (anti-cheat)
+                </label>
+                <button
+                  type="button"
+                  onClick={() => setStrictMode(s => !s)}
+                  className={`w-full flex items-start gap-3 p-3 rounded-xl border-2 transition-all text-left ${
+                    strictMode
+                      ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-900/20'
+                      : 'border-gray-100 dark:border-gray-700 hover:border-indigo-300'
+                  }`}
+                >
+                  <div className={`p-1.5 rounded-lg flex-shrink-0 ${strictMode ? 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/50 dark:text-indigo-400' : 'bg-gray-100 text-gray-500 dark:bg-gray-700 dark:text-gray-400'}`}>
+                    <ShieldCheck size={16} />
+                  </div>
+                  <div className="flex-1">
+                    <div className="text-sm font-semibold text-gray-800 dark:text-gray-200">
+                      {strictMode ? 'Bật — bắt buộc toàn màn hình' : 'Tắt'}
+                    </div>
+                    <div className="text-xs text-gray-400 leading-relaxed">
+                      Khi bắt đầu làm bài kỹ năng bất kỳ trong bộ: bắt buộc toàn màn hình, chặn mở tab mới / đổi tab / sao chép; sau 3 lần vi phạm tự động nộp bài.
+                    </div>
+                  </div>
+                  {strictMode && <CheckCircle2 size={18} className="text-indigo-600 flex-shrink-0" />}
+                </button>
               </div>
 
               {error && (
