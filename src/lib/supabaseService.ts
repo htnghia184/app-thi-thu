@@ -2278,19 +2278,31 @@ export async function fetchAdminStats() {
     return count || 0;
   };
 
-  const { count: leadsCount } = await supabase
+  // Guest Leads: thống kê theo hierarchy — mỗi người / 1 lần thi bộ = 1 lead.
+  // Nhóm toàn bộ exam_leads theo session_id (bộ đề) hoặc id (lead lẻ); session rỗng
+  // (tạo ra nhưng chưa làm kỹ năng nào) không tính là lead.
+  const { data: leadRows } = await supabase
     .from('exam_leads')
-    .select('*', { count: 'exact', head: true });
+    .select('id, session_id, skill_type, grading_status');
 
-  const { count: pendingCount } = await supabase
-    .from('exam_leads')
-    .select('*', { count: 'exact', head: true })
-    .in('grading_status', ['unassigned', 'assigned']);
+  const leadGroups = new Map<string, Map<string, string>>();
+  for (const l of leadRows || []) {
+    const key = l.session_id || l.id;
+    if (!leadGroups.has(key)) leadGroups.set(key, new Map());
+    leadGroups.get(key)!.set(l.skill_type, l.grading_status);
+  }
 
-  const { count: gradedCount } = await supabase
-    .from('exam_leads')
-    .select('*', { count: 'exact', head: true })
-    .eq('grading_status', 'graded');
+  // Chỉ writing/speaking cần chấm thủ công; reading/listening tự chấm ngay khi nộp.
+  const MANUAL_SKILLS = ['writing', 'speaking'];
+  let pendingCount = 0;
+  let gradedCount = 0;
+  for (const skills of leadGroups.values()) {
+    const needsManual = [...skills.entries()].some(
+      ([skill, st]) => MANUAL_SKILLS.includes(skill) && st !== 'graded'
+    );
+    if (needsManual) pendingCount++;
+    else gradedCount++;
+  }
 
   const [exams, students, teachers, classes] = await Promise.all([
     countAll('exams'),
@@ -2304,9 +2316,9 @@ export async function fetchAdminStats() {
     students,
     teachers,
     classes,
-    leads: leadsCount || 0,
-    pending_grading: pendingCount || 0,
-    graded: gradedCount || 0,
+    leads: leadGroups.size,
+    pending_grading: pendingCount,
+    graded: gradedCount,
   };
 }
 

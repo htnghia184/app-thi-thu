@@ -2,9 +2,10 @@ import React, { useEffect, useState, useCallback, useMemo } from 'react';
 import {
   Loader2, RefreshCw, BookOpen, Users, GraduationCap, School,
   PhoneCall, ClipboardList, CheckCircle2, AlertCircle, ArrowRight,
-  Phone, FileText, Clock, Search, X, Filter,
+  Phone, Clock, Search, X, Filter,
 } from 'lucide-react';
 import { fetchAdminStats, fetchExamLeads } from '../lib/supabaseService';
+import { skillBadge } from '../utils/format';
 
 interface AdminOverviewProps {
   onNavigate: (tab: string) => void;
@@ -49,25 +50,43 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
   const matchSearch = (l: any, q: string) =>
     !q || `${l.full_name || ''} ${l.phone || ''}`.toLowerCase().includes(q);
 
-  const filteredLeads = useMemo(() => {
-    const q = search.trim().toLowerCase();
-    return leads.filter(l =>
-      (statusFilter === 'all' || l.grading_status === statusFilter) &&
-      (skillFilter === 'all' || l.skill_type === skillFilter) &&
-      matchTime(l.created_at) &&
-      matchSearch(l, q)
-    );
-  }, [leads, search, statusFilter, skillFilter, timeFilter]);
+  /** Nhóm các lead trùng (cùng session bộ đề — 4 kỹ năng) thành 1 hierarchy: 1 lead / 1 người / 1 lần thi */
+  const leadGroups = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const l of leads) {
+      const key = l.session_id || l.id;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(l);
+    }
+    return Array.from(map.values());
+  }, [leads]);
 
-  const pendingLeads = useMemo(() => {
+  const filteredGroups = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return leads.filter(l =>
-      l.grading_status !== 'graded' &&
-      (skillFilter === 'all' || l.skill_type === skillFilter) &&
-      matchTime(l.created_at) &&
-      matchSearch(l, q)
+    return leadGroups.filter(group =>
+      group.some(l =>
+        (statusFilter === 'all' || l.grading_status === statusFilter) &&
+        (skillFilter === 'all' || l.skill_type === skillFilter) &&
+        matchTime(l.created_at) &&
+        matchSearch(l, q)
+      )
     );
-  }, [leads, search, skillFilter, timeFilter]);
+  }, [leadGroups, search, statusFilter, skillFilter, timeFilter]);
+
+  /** Lead cần chấm thủ công (writing/speaking chưa chấm) — nhóm theo hierarchy, 1 dòng = 1 lead */
+  const pendingGroups = useMemo(() => {
+    const q = search.trim().toLowerCase();
+    const needsManual = (l: any) =>
+      (l.skill_type === 'writing' || l.skill_type === 'speaking') && l.grading_status !== 'graded';
+    return leadGroups.filter(group =>
+      group.some(needsManual) &&
+      group.some(l =>
+        (skillFilter === 'all' || l.skill_type === skillFilter) &&
+        matchTime(l.created_at) &&
+        matchSearch(l, q)
+      )
+    );
+  }, [leadGroups, search, skillFilter, timeFilter]);
 
   const hasFilter = search.trim() !== '' || statusFilter !== 'all' || skillFilter !== 'all' || timeFilter !== 'all';
 
@@ -228,8 +247,8 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
             <h3 className="font-bold text-indigo-900 dark:text-gray-100 flex items-center gap-2">
               <PhoneCall size={18} className="text-rose-500" />
               Leads mới nhất
-              {filteredLeads.length > 0 && (
-                <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">({filteredLeads.length})</span>
+              {filteredGroups.length > 0 && (
+                <span className="text-xs font-semibold text-gray-400 dark:text-gray-500">({filteredGroups.length})</span>
               )}
             </h3>
             <button
@@ -239,33 +258,52 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
               Xem tất cả →
             </button>
           </div>
-          {filteredLeads.length === 0 ? (
+          {filteredGroups.length === 0 ? (
             <div className="p-8 text-center text-sm text-gray-400">
               {leads.length === 0 ? 'Chưa có lead nào.' : 'Không có lead phù hợp với bộ lọc.'}
             </div>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-gray-700">
-              {filteredLeads.slice(0, 8).map(lead => (
-                <div key={lead.id} className="px-5 py-3 flex items-center gap-3">
-                  <div className="w-9 h-9 rounded-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 font-bold text-sm flex-shrink-0">
-                    {(lead.full_name || '?').charAt(0).toUpperCase()}
-                  </div>
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{lead.full_name}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 truncate">
-                      <Phone size={11} />
-                      {lead.phone} · <FileText size={11} /> {lead.exam_title || '-'}
+              {filteredGroups.slice(0, 8).map(group => {
+                const lead = group[0];
+                const gradedCount = group.filter(g => g.grading_status === 'graded').length;
+                const latest = new Date(Math.max(...group.map(g => new Date(g.created_at).getTime()))).toISOString();
+                return (
+                  <div key={lead.id} className="px-5 py-3 flex items-center gap-3">
+                    <div className="w-9 h-9 rounded-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 font-bold text-sm flex-shrink-0">
+                      {(lead.full_name || '?').charAt(0).toUpperCase()}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{lead.full_name}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 truncate">
+                        <Phone size={11} />
+                        {lead.phone}
+                      </div>
+                      {/* Hierarchy: các kỹ năng của cùng 1 lead */}
+                      <div className="flex flex-wrap gap-1 mt-1.5">
+                        {group.map(g => (
+                          <span key={g.id} className="inline-flex items-center gap-1">
+                            {skillBadge(g.skill_type)}
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      {group.length > 1 ? (
+                        <span className="text-[11px] font-semibold text-indigo-600 dark:text-indigo-400 whitespace-nowrap">
+                          {group.length} kỹ năng · {gradedCount}/{group.length} đã chấm
+                        </span>
+                      ) : (
+                        statusBadge(lead.grading_status)
+                      )}
+                      <span className="text-[11px] text-gray-400 flex items-center gap-1">
+                        <Clock size={10} />
+                        {formatDate(latest)}
+                      </span>
                     </div>
                   </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    {statusBadge(lead.grading_status)}
-                    <span className="text-[11px] text-gray-400 flex items-center gap-1">
-                      <Clock size={10} />
-                      {formatDate(lead.created_at)}
-                    </span>
-                  </div>
-                </div>
-              ))}
+                );
+              })}
             </div>
           )}
         </div>
@@ -284,7 +322,7 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
               Vào chấm bài →
             </button>
           </div>
-          {pendingLeads.length === 0 ? (
+          {pendingGroups.length === 0 ? (
             <div className="p-8 text-center">
               <CheckCircle2 size={40} className="mx-auto text-emerald-400 mb-3" />
               <p className="text-sm text-gray-500 dark:text-gray-400">
@@ -297,22 +335,35 @@ export const AdminOverview: React.FC<AdminOverviewProps> = ({ onNavigate }) => {
             </div>
           ) : (
             <div className="divide-y divide-gray-100 dark:divide-gray-700">
-              {pendingLeads.slice(0, 6).map(lead => (
-                <button
-                  key={lead.id}
-                  onClick={() => onNavigate('guest_grading')}
-                  className="w-full px-5 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left"
-                >
-                  <AlertCircle size={16} className="text-amber-500 flex-shrink-0" />
-                  <div className="flex-1 min-w-0">
-                    <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{lead.full_name}</div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                      {lead.exam_title || '-'} · <span className="capitalize">{lead.skill_type || '-'}</span>
+              {pendingGroups.slice(0, 6).map(group => {
+                const head = group[0];
+                const ungradedManual = group.filter(l =>
+                  (l.skill_type === 'writing' || l.skill_type === 'speaking') && l.grading_status !== 'graded'
+                );
+                return (
+                  <button
+                    key={head.id}
+                    onClick={() => onNavigate('guest_grading')}
+                    className="w-full px-5 py-3 flex items-center gap-3 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors text-left"
+                  >
+                    <AlertCircle size={16} className="text-amber-500 flex-shrink-0" />
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{head.full_name}</div>
+                      <div className="flex flex-wrap items-center gap-1 mt-1">
+                        {ungradedManual.map(l => (
+                          <span key={l.id}>{skillBadge(l.skill_type)}</span>
+                        ))}
+                        {group.length > 1 && (
+                          <span className="text-[11px] text-gray-400">· {group.length} kỹ năng</span>
+                        )}
+                      </div>
                     </div>
-                  </div>
-                  {statusBadge(lead.grading_status)}
-                </button>
-              ))}
+                    <span className="text-[11px] font-semibold text-amber-600 dark:text-amber-400 whitespace-nowrap">
+                      {ungradedManual.length} kỹ năng chưa chấm
+                    </span>
+                  </button>
+                );
+              })}
             </div>
           )}
         </div>

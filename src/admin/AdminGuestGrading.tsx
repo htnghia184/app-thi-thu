@@ -3,6 +3,7 @@ import {
   Loader2, RefreshCw, Search, Filter, User, Phone, Mail, FileText,
   ClipboardList, CheckCircle2, Clock, GraduationCap, X, Save,
   AlertCircle, Mic, PenLine, TrendingUp, ShieldCheck, Download,
+  ChevronDown, Layers,
 } from 'lucide-react';
 import {
   fetchGuestLeadsForGrading, fetchTeachers, assignTeacherToLead,
@@ -30,6 +31,10 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('all');
   const [skillFilter, setSkillFilter] = useState<SkillFilter>('all');
   const [selectedLead, setSelectedLead] = useState<any>(null);
+  /** Thứ tự hiển thị kỹ năng trong 1 hierarchy */
+  const skillOrder = ['reading', 'listening', 'writing', 'speaking'];
+  /** Mở / đóng các kỹ năng con của từng lead (hierarchy) */
+  const [expandedKeys, setExpandedKeys] = useState<Record<string, boolean>>({});
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -68,12 +73,83 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
     });
   }, [leads, statusFilter, skillFilter, searchTerm]);
 
-  const stats = useMemo(() => ({
-    total: leads.length,
-    unassigned: leads.filter(l => l.grading_status === 'unassigned').length,
-    assigned: leads.filter(l => l.grading_status === 'assigned').length,
-    graded: leads.filter(l => l.grading_status === 'graded').length,
-  }), [leads]);
+  /** Nhóm lead trùng (cùng session bộ đề — 4 kỹ năng) thành 1 hierarchy: 1 lead / 1 người / 1 lần thi */
+  const groups = useMemo(() => {
+    const map = new Map<string, any[]>();
+    for (const l of filtered) {
+      const key = l.session_id || l.id;
+      if (!map.has(key)) map.set(key, []);
+      map.get(key)!.push(l);
+    }
+    return Array.from(map.entries()).map(([key, items]) => ({
+      key,
+      items: items.sort((a, b) => skillOrder.indexOf(a.skill_type) - skillOrder.indexOf(b.skill_type)),
+    }));
+  }, [filtered]);
+
+  const stats = useMemo(() => {
+    // Thống kê theo hierarchy (lead) — mỗi lead chỉ đếm 1 lần (1 lead / 1 người / 1 lần thi).
+    // Chỉ writing/speaking cần chấm thủ công; reading/listening tự chấm nên coi như xong.
+    // Các nhóm rời nhau: chưa gán + đang chờ chấm + đã chấm = tổng lead.
+    const needsManual = (l: any) =>
+      (l.skill_type === 'writing' || l.skill_type === 'speaking') && l.grading_status !== 'graded';
+    let unassigned = 0;
+    let assigned = 0;
+    let graded = 0;
+    for (const g of groups) {
+      const manual = g.items.filter(needsManual);
+      if (manual.length === 0) {
+        graded++;
+      } else if (manual.some(l => l.grading_status === 'assigned')) {
+        assigned++;
+      } else {
+        unassigned++;
+      }
+    }
+    return { total: groups.length, unassigned, assigned, graded };
+  }, [groups]);
+
+  const renderScore = (lead: any) => {
+    if (lead.grade_score != null) {
+      return (
+        <div className="flex items-center gap-1.5">
+          <TrendingUp size={14} className="text-emerald-500" />
+          <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{lead.grade_score}</span>
+          <span className="text-xs text-gray-400">/10</span>
+        </div>
+      );
+    }
+    if (lead.skill_type === 'reading' || lead.skill_type === 'listening') {
+      return (
+        <div className="flex items-center gap-1.5">
+          <TrendingUp size={14} className="text-indigo-500" />
+          <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{lead.score_vstep ?? '-'}</span>
+          <span className="text-xs text-gray-400">(auto)</span>
+        </div>
+      );
+    }
+    return <span className="text-xs text-gray-400">-</span>;
+  };
+
+  const renderCustomer = (lead: any) => (
+    <div className="flex items-center gap-2">
+      <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 font-bold text-xs flex-shrink-0">
+        {(lead.full_name || '?').charAt(0).toUpperCase()}
+      </div>
+      <div className="min-w-0">
+        <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{lead.full_name}</div>
+        <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
+          <Phone size={10} />
+          <a href={`tel:${lead.phone}`} className="hover:text-indigo-600 dark:hover:text-indigo-400">{lead.phone}</a>
+        </div>
+        {lead.email && (
+          <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1 truncate">
+            <Mail size={10} /> {lead.email}
+          </div>
+        )}
+      </div>
+    </div>
+  );
 
   const handleAssign = async (leadId: string, teacherId: string) => {
     setSaving(true);
@@ -121,7 +197,7 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mb-6">
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5">
           <div className="text-2xl font-bold text-indigo-600">{stats.total}</div>
-          <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Tổng bài</div>
+          <div className="text-xs md:text-sm text-gray-500 dark:text-gray-400">Tổng lead</div>
         </div>
         <div className="bg-white dark:bg-gray-800 rounded-xl shadow-lg p-5">
           <div className="text-2xl font-bold text-gray-500 dark:text-gray-400">{stats.unassigned}</div>
@@ -215,95 +291,137 @@ export const AdminGuestGrading: React.FC<AdminGuestGradingProps> = ({ userId, vi
                 </tr>
               </thead>
               <tbody>
-                {filtered.map((lead, index) => (
-                  <tr key={lead.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
-                    <td className="py-3 px-4 text-gray-500 dark:text-gray-400 text-sm">{index + 1}</td>
-                    <td className="py-3 px-4">
-                      <div className="flex items-center gap-2">
-                        <div className="w-8 h-8 rounded-full bg-rose-50 dark:bg-rose-900/30 flex items-center justify-center text-rose-600 dark:text-rose-400 font-bold text-xs flex-shrink-0">
-                          {(lead.full_name || '?').charAt(0).toUpperCase()}
-                        </div>
-                        <div className="min-w-0">
-                          <div className="text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">{lead.full_name}</div>
-                          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1">
-                            <Phone size={10} />
-                            <a href={`tel:${lead.phone}`} className="hover:text-indigo-600 dark:hover:text-indigo-400">{lead.phone}</a>
-                          </div>
-                          {lead.email && (
-                            <div className="text-xs text-gray-400 dark:text-gray-500 flex items-center gap-1 truncate">
-                              <Mail size={10} /> {lead.email}
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </td>
-                    {isAdmin && (
-                      <td className="py-3 px-4">
-                        {lead.passcode ? (
-                          <span className="inline-flex px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-mono font-semibold tracking-wider">
-                            {lead.passcode}
-                          </span>
-                        ) : (
-                          <span className="text-xs text-gray-400">-</span>
-                        )}
-                      </td>
-                    )}
-                    <td className="py-3 px-4">
-                      <div className="text-sm text-gray-700 dark:text-gray-300 max-w-[180px] truncate flex items-center gap-1.5">
-                        <FileText size={13} className="text-gray-400 flex-shrink-0" />
-                        {lead.exam_title || '-'}
-                      </div>
-                    </td>
-                    <td className="py-3 px-4">{skillBadge(lead.skill_type)}</td>
-                    <td className="py-3 px-4">{statusBadge(lead.grading_status)}</td>
-                    {isAdmin && (
-                      <td className="py-3 px-4">
-                        <select
-                          value={lead.assigned_teacher_id || ''}
-                          disabled={saving}
-                          onChange={e => handleAssign(lead.id, e.target.value)}
-                          className="px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:bg-gray-700 dark:text-gray-200 outline-none max-w-[170px]"
-                        >
-                          <option value="">— Chưa gán —</option>
-                          {teachers.map(t => (
-                            <option key={t.id} value={t.id}>{t.full_name || t.email}</option>
-                          ))}
-                        </select>
-                      </td>
-                    )}
-                    <td className="py-3 px-4">
-                      {lead.grade_score != null ? (
-                        <div className="flex items-center gap-1.5">
-                          <TrendingUp size={14} className="text-emerald-500" />
-                          <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{lead.grade_score}</span>
-                          <span className="text-xs text-gray-400">/10</span>
-                        </div>
-                      ) : lead.skill_type === 'reading' || lead.skill_type === 'listening' ? (
-                        <div className="flex items-center gap-1.5">
-                          <TrendingUp size={14} className="text-indigo-500" />
-                          <span className="text-sm font-bold text-gray-800 dark:text-gray-200">{lead.score_vstep ?? '-'}</span>
-                          <span className="text-xs text-gray-400">(auto)</span>
-                        </div>
-                      ) : (
-                        <span className="text-xs text-gray-400">-</span>
+                {groups.map((group, gi) => {
+                  const isMulti = group.items.length > 1;
+                  const head = group.items[0];
+                  const expanded = !isMulti || !!expandedKeys[group.key];
+                  const gradedCount = group.items.filter(l => l.grading_status === 'graded').length;
+                  const assignedCount = group.items.filter(l => l.grading_status === 'assigned').length;
+                  const unassignedCount = group.items.filter(l => l.grading_status === 'unassigned').length;
+
+                  /** Dòng 1 kỹ năng (con của hierarchy). full = nhóm đơn lẻ → hiện đầy đủ thông tin */
+                  const skillRow = (lead: any, subIndex: number, full: boolean) => (
+                    <tr key={lead.id} className="border-b border-gray-100 dark:border-gray-700 hover:bg-gray-50 dark:hover:bg-gray-700/30 transition-colors">
+                      <td className="py-3 px-4 text-xs text-gray-400">{full ? subIndex : `${gi + 1}.${subIndex}`}</td>
+                      <td className="py-3 px-4">{full ? renderCustomer(lead) : null}</td>
+                      {isAdmin && (
+                        <td className="py-3 px-4">
+                          {full ? (
+                            lead.passcode ? (
+                              <span className="inline-flex px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-mono font-semibold tracking-wider">
+                                {lead.passcode}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )
+                          ) : null}
+                        </td>
                       )}
-                    </td>
-                    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatTime(lead.time_spent_seconds)}</td>
-                    <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDateTime(lead.created_at)}</td>
-                    <td className="py-3 px-4 text-right">
-                      <button
-                        onClick={() => setSelectedLead(lead)}
-                        className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
-                          lead.grading_status === 'graded'
-                            ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
-                            : 'bg-indigo-600 text-white hover:bg-indigo-700'
-                        }`}
-                      >
-                        {lead.grading_status === 'graded' ? 'Xem / Sửa' : 'Chấm bài'}
-                      </button>
-                    </td>
-                  </tr>
-                ))}
+                      <td className="py-3 px-4">
+                        <div className="text-sm text-gray-700 dark:text-gray-300 max-w-[180px] truncate flex items-center gap-1.5">
+                          <FileText size={13} className="text-gray-400 flex-shrink-0" />
+                          {lead.exam_title || '-'}
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">{skillBadge(lead.skill_type)}</td>
+                      <td className="py-3 px-4">{statusBadge(lead.grading_status)}</td>
+                      {isAdmin && (
+                        <td className="py-3 px-4">
+                          <select
+                            value={lead.assigned_teacher_id || ''}
+                            disabled={saving}
+                            onChange={e => handleAssign(lead.id, e.target.value)}
+                            className="px-2 py-1.5 border border-gray-200 dark:border-gray-600 rounded-lg text-xs dark:bg-gray-700 dark:text-gray-200 outline-none max-w-[170px]"
+                          >
+                            <option value="">— Chưa gán —</option>
+                            {teachers.map(t => (
+                              <option key={t.id} value={t.id}>{t.full_name || t.email}</option>
+                            ))}
+                          </select>
+                        </td>
+                      )}
+                      <td className="py-3 px-4">{renderScore(lead)}</td>
+                      <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatTime(lead.time_spent_seconds)}</td>
+                      <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                        {full ? formatDateTime(lead.created_at) : null}
+                      </td>
+                      <td className="py-3 px-4 text-right">
+                        <button
+                          onClick={() => setSelectedLead(lead)}
+                          className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-colors ${
+                            lead.grading_status === 'graded'
+                              ? 'bg-emerald-50 dark:bg-emerald-900/30 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100'
+                              : 'bg-indigo-600 text-white hover:bg-indigo-700'
+                          }`}
+                        >
+                          {lead.grading_status === 'graded' ? 'Xem / Sửa' : 'Chấm bài'}
+                        </button>
+                      </td>
+                    </tr>
+                  );
+
+                  if (!isMulti) {
+                    return <React.Fragment key={group.key}>{skillRow(head, gi + 1, true)}</React.Fragment>;
+                  }
+
+                  return (
+                    <React.Fragment key={group.key}>
+                      {/* Dòng lead (hierarchy header) — thông tin liên hệ / passcode / ngày chỉ hiện 1 lần ở đây */}
+                      <tr className="bg-indigo-50/70 dark:bg-indigo-900/10 border-b border-gray-200 dark:border-gray-700">
+                        <td className="py-3 px-4">
+                          <div className="flex items-center gap-2">
+                            <button
+                              onClick={() => setExpandedKeys(k => ({ ...k, [group.key]: !k[group.key] }))}
+                              className="text-indigo-500 hover:text-indigo-700 transition-colors"
+                              title={expanded ? 'Thu gọn kỹ năng' : 'Mở chi tiết kỹ năng'}
+                            >
+                              <ChevronDown size={16} className={`transition-transform ${expanded ? '' : '-rotate-90'}`} />
+                            </button>
+                            <span className="text-xs font-bold text-indigo-700 dark:text-indigo-300">{gi + 1}</span>
+                          </div>
+                        </td>
+                        <td className="py-3 px-4">{renderCustomer(head)}</td>
+                        {isAdmin && (
+                          <td className="py-3 px-4">
+                            {head.passcode ? (
+                              <span className="inline-flex px-2 py-0.5 rounded-md bg-indigo-50 dark:bg-indigo-900/30 text-indigo-700 dark:text-indigo-300 text-xs font-mono font-semibold tracking-wider">
+                                {head.passcode}
+                              </span>
+                            ) : (
+                              <span className="text-xs text-gray-400">-</span>
+                            )}
+                          </td>
+                        )}
+                        <td className="py-3 px-4">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 flex items-center gap-1.5 flex-wrap">
+                            <Layers size={13} className="text-indigo-400 flex-shrink-0" />
+                            <span className="font-semibold text-indigo-700 dark:text-indigo-300">{group.items.length} kỹ năng</span>
+                            {gradedCount === group.items.length ? (
+                              <span className="text-emerald-600 font-semibold">· Đã chấm hết</span>
+                            ) : (
+                              <>
+                                <span className="text-emerald-600 font-semibold">· {gradedCount} đã chấm</span>
+                                {assignedCount > 0 && <span className="text-amber-600 font-semibold">· {assignedCount} đang chấm</span>}
+                                {unassignedCount > 0 && <span className="text-gray-500 dark:text-gray-400 font-semibold">· {unassignedCount} chưa gán</span>}
+                              </>
+                            )}
+                          </div>
+                        </td>
+                        <td className="py-3 px-4"><span className="text-xs text-gray-400">tất cả</span></td>
+                        <td className="py-3 px-4"><span className="text-[11px] font-semibold text-indigo-500">1 lead</span></td>
+                        {isAdmin && <td className="py-3 px-4" />}
+                        <td className="py-3 px-4"><span className="text-xs text-gray-400">xem từng kỹ năng</span></td>
+                        <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">
+                          {formatTime(group.items.reduce((s, l) => s + (l.time_spent_seconds || 0), 0))}
+                        </td>
+                        <td className="py-3 px-4 text-sm text-gray-500 dark:text-gray-400 whitespace-nowrap">{formatDateTime(head.created_at)}</td>
+                        <td className="py-3 px-4 text-right" />
+                      </tr>
+                      {/* Các kỹ năng con (chỉ hiện khi mở) — không lặp thông tin liên hệ */}
+                      {expanded && group.items.map((lead, index) => skillRow(lead, index + 1, false))}
+                    </React.Fragment>
+                  );
+                })}
               </tbody>
             </table>
           </div>
